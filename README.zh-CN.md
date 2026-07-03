@@ -201,6 +201,8 @@ v0.2.0 聚焦本地可视化与刷新，以下能力尚未完整实现：
 
 ## 文档
 
+- [项目说明书](docs/PROJECT_MANUAL.zh-CN.md)
+- [项目规划与发展路线](docs/ROADMAP.zh-CN.md)
 - [架构](docs/ARCHITECTURE.md)
 - [数据源](docs/DATA_SOURCE.md)
 - [数据源适配研究](docs/SOURCE_ADAPTER_RESEARCH.md)

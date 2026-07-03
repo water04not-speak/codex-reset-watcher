@@ -134,4 +134,4 @@ npm run verify:sources
 
 The app does not store tokens in config. The optional Rust wham adapter reads `auth.json` only inside the Tauri host process. Examples and logs must redact sensitive fields before sharing.
 
-See also `docs/SOURCE_ADAPTER_RESEARCH.md` and `docs/PRIVACY.md`.
+See also `docs/SOURCE_ADAPTER_RESEARCH.md`, `docs/TEST_REPORT.md`, and `docs/PRIVACY.md`.

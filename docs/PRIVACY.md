@@ -17,6 +17,8 @@ When **auto** mode selects the built-in wham adapter:
 - Access tokens are used for HTTPS calls to Codex wham endpoints and are **not** sent to React, not written to config, and not logged
 - The frontend receives only normalized quota JSON (same shape as script stdout)
 
+- If upstream Codex APIs or JSON schemas change, auto-detected adapters may need an app update.
+
 ## What Is Logged
 
 Logs may include:

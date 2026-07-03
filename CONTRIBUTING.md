@@ -3,7 +3,7 @@
 ## Development Setup
 
 1. Install Rust 1.70 or newer.
-2. Install Node.js 18 or newer.
+2. Install **Node.js 20.12+** (Node.js 22 LTS recommended).
 3. Clone the repository.
 4. Run `npm install`.
 5. Run `npm run tauri dev`.

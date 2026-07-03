@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UI performance: isolated countdown header, `React.memo` on main cards, lazy debug panel, reduced backdrop-filter in scroll area.
 - `fetch_codex_raw` runs on a blocking thread pool; stdout/stderr size limits with truncation warnings.
 - `rawText` in parsed state capped at 2 KB; test connection uses lightweight Rust probe.
+- Documentation synced for v0.2.0 source and privacy model.
 
 ### Security
 

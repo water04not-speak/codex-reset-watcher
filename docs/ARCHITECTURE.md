@@ -1,62 +1,66 @@
 # Architecture
 
-Codex Reset Watcher is split into a small Tauri host, a TypeScript core layer, and React UI components.
+Codex Reset Watcher is split into a Tauri host, a TypeScript core layer (including the v0.2.0 source adapter), and React UI components.
 
 ```text
-+------------------+      +------------------+      +------------------+
-| Codex-Usage      | ---> | Tauri Rust host  | ---> | TypeScript core  |
-| local Python CLI |      | spawn + config   |      | parse + status   |
-+------------------+      +------------------+      +------------------+
-                                                           |
-                                                           v
-                                                    +--------------+
-                                                    | React UI     |
-                                                    | cards/gauges |
-                                                    +--------------+
++------------------+      +----------------------+      +------------------+
+| Codex-Usage      | ---> | Tauri Rust host      | ---> | TypeScript core  |
+| script / wham /  |      | detect + spawn +     |      | sources + parse  |
+| session JSONL    |      | adapters + config    |      | + status         |
++------------------+      +----------------------+      +------------------+
+                                                                  |
+                                                                  v
+                                                           +--------------+
+                                                           | React UI     |
+                                                           +--------------+
 ```
 
-## Rust Responsibilities
+## Rust responsibilities
 
-The Rust side lives in `src-tauri/src/lib.rs`.
+Modules under `src-tauri/src/`:
 
-- Spawn the configured Python command with the configured Codex-Usage script.
-- Set `PYTHONUTF8=1` for stable stdout handling.
-- Enforce process timeout and kill timed-out child processes.
-- Read and write `appConfigDir/config.json`.
-- Sanitize logs before writing diagnostic information.
-- Avoid opening a Windows console window for background commands.
+| Module | Role |
+|--------|------|
+| `lib.rs` | Tauri commands, Python spawn, wiring |
+| `source_detect.rs` | `detect_codex_sources()` — scan paths, probe scripts, list candidates |
+| `wham_adapter.rs` | Win-CodexBar-compatible `/wham/*` client (auth in Rust only) |
+| `session_log.rs` | codex-quota-widget-compatible session JSONL fallback |
+| `sanitize.rs` | Redaction, path sanitization, log rotation |
 
-## TypeScript Core Responsibilities
+Commands:
 
-The TypeScript core lives in `src/core/`.
+- `fetch_codex_raw` — spawn configured Python script
+- `fetch_codex_adapter` — wham or session-log adapter
+- `detect_codex_sources` — auto-detection
+- `test_codex_source` — lightweight script probe
+- `read_app_config` / `write_app_config` / `app_log`
 
-- `bridge.ts` is the only frontend data bridge used by UI code.
-- `parser.ts` converts raw JSON text into `AppState`.
-- `status.ts` classifies reset credits and rate-limit windows.
-- `recommend.ts` generates user-facing recommendations.
-- `config.ts` normalizes settings and clamps refresh intervals.
-- `types.ts` defines the shared contract between Rust, core, and UI.
+## TypeScript core responsibilities
 
-## UI Responsibilities
+`src/core/`:
 
-The React UI lives in `src/`.
+- `bridge.ts` — UI-facing data bridge
+- `sources/` — source mode routing, normalization, auto-detect consumer
+- `parser.ts` — raw JSON → `AppState`
+- `config.ts` — defaults, migration (`sourceMode`, `configVersion`)
+- `privacy.ts` — UI path/error sanitization
 
-- `App.tsx` owns refresh scheduling, config loading, language selection, and modal state.
-- `src/components/OverviewCards.tsx` renders top-level summary cards.
-- `src/components/CreditTimeline.tsx` renders reset credit cards.
-- `src/components/LiquidGauge.tsx` renders 5-hour and 7-day window gauges.
-- `src/components/RecommendationCard.tsx` renders usage recommendations.
-- `src/components/SettingsModal.tsx` edits local configuration.
+## UI responsibilities
 
-## Data Flow
+- `App.tsx` — refresh scheduling, auto-connect banner, failure empty state
+- `SettingsModal.tsx` — data source section + manual script fields
+- `ErrorBoundary.tsx` — fatal render errors with reload
+
+## Data flow (auto mode)
 
 ```text
-Python script
-  -> Rust fetch_codex_raw
-  -> TypeScript refreshAppState
-  -> parser buildAppState
-  -> AppState
-  -> React components
+detect_codex_sources (Rust)
+  -> pick candidate by confidence
+  -> script: fetch_codex_raw
+     wham: fetch_codex_adapter(wham)
+     session: fetch_codex_adapter(session-log)
+  -> refreshBySourceMode / buildAppState
+  -> AppState -> React
 ```
 
-The UI never stores raw stdout in logs. Raw data is parsed in memory and converted into the compact `AppState` contract.
+The UI never stores raw stdout in logs. Tokens never cross the IPC boundary.

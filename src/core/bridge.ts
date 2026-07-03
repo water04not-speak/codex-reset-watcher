@@ -1,15 +1,13 @@
 /**
  * 数据桥（前端侧封装）。
  *
- * 这是 UI 唯一应该依赖的入口：不要在组件里直接 invoke Rust 命令。
- * - fetchRaw(): 调用 Rust `fetch_codex_raw`，拿到某个 kind 的原始 stdout。
- * - refreshAppState(): 按需拉取多个 kind，交给 parser 规范化成 AppState。
- * - loadConfig() / saveConfig(): 读写用户配置（存于 appConfigDir）。
- *
- * 注意：Tauri v2 会自动把 JS 的 camelCase 参数转换为 Rust 的 snake_case。
+ * UI 应通过 refreshBySourceMode / sources 层访问数据，而非直接 invoke。
  */
 import { invoke } from "@tauri-apps/api/core";
 import { buildAppState } from "./parser";
+import { sanitizeErrorMessage } from "./privacy";
+import { isRefreshLocked } from "./refreshLock";
+import { refreshBySourceMode } from "./sources";
 import type {
   AppConfig,
   AppState,
@@ -17,8 +15,9 @@ import type {
   RawFetchKind,
   RawFetchResult,
 } from "./types";
+import type { ResolvedSource, SourceDetectionResult } from "./sources/types";
 
-/** 自动刷新最小值（秒）——低于则夹到 60。（模块内私有，避免与 config 的同名导出在 barrel 冲突。） */
+/** 自动刷新最小值（秒）——低于则夹到 60。 */
 const MIN_REFRESH_INTERVAL_SECONDS = 60;
 
 /** 把配置里的刷新间隔夹到合法区间（最小 60 秒）。 */
@@ -28,8 +27,7 @@ export function normalizeRefreshInterval(seconds: number): number {
 }
 
 /**
- * 调用 Rust 数据桥，返回某个 kind 的原始结果。
- * 失败时不抛异常，返回带 error 的 RawFetchResult。
+ * 调用 Rust 数据桥，返回某个 kind 的原始结果（脚本模式专用）。
  */
 export async function fetchRaw(
   kind: RawFetchKind,
@@ -53,12 +51,12 @@ export async function fetchRaw(
       timedOut: false,
       durationMs: 0,
       error: String(err),
+      warning: null,
     };
   }
 }
 
 export interface RefreshOptions {
-  /** 拉取策略：'all' 用单次 all 命令；'split' 分别拉 resets/online/local（默认 all）。 */
   strategy?: "all" | "split";
   lang?: LanguageCode;
   previous?: AppState | null;
@@ -66,10 +64,24 @@ export interface RefreshOptions {
   now?: Date;
 }
 
+export interface RefreshResult {
+  state: AppState;
+  resolved: ResolvedSource | null;
+  detection?: SourceDetectionResult;
+}
+
 /**
- * 拉取并规范化为 AppState。UI 通常只需调用这个。
+ * 按 sourceMode 拉取并规范化为 AppState。
  */
 export async function refreshAppState(
+  config: AppConfig,
+  options: RefreshOptions = {},
+): Promise<RefreshResult> {
+  return refreshBySourceMode(config, options);
+}
+
+/** @deprecated 使用 refreshAppState；保留兼容旧调用签名。 */
+export async function refreshAppStateLegacy(
   config: Pick<AppConfig, "pythonCommand" | "codexUsagePath">,
   options: RefreshOptions = {},
 ): Promise<AppState> {
@@ -117,7 +129,7 @@ export async function loadConfig(): Promise<AppConfig | null> {
  * 保存用户配置到 appConfigDir/config.json。刷新间隔会被夹到最小 60 秒。
  */
 export async function saveConfig(config: AppConfig): Promise<void> {
-  const normalized: AppConfig = {
+  const normalized = {
     ...config,
     refreshIntervalSeconds: normalizeRefreshInterval(
       config.refreshIntervalSeconds,
@@ -126,4 +138,99 @@ export async function saveConfig(config: AppConfig): Promise<void> {
   await invoke("write_app_config", {
     contents: JSON.stringify(normalized, null, 2),
   });
+}
+
+/** 触发 Rust 侧重新探测数据源。 */
+export async function detectCodexSources(): Promise<SourceDetectionResult> {
+  return invoke<SourceDetectionResult>("detect_codex_sources");
+}
+
+export type TestSourceStatus =
+  | "success"
+  | "python_missing"
+  | "script_missing"
+  | "exec_failed"
+  | "timeout"
+  | "invalid_json"
+  | "unrecognized_structure"
+  | "empty_output"
+  | "probe_failed"
+  | "unknown";
+
+export interface TestSourceResult {
+  ok: boolean;
+  status: TestSourceStatus;
+}
+
+function classifySpawnError(message: string): TestSourceStatus {
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("no such file") ||
+    lower.includes("not found") ||
+    lower.includes("cannot find") ||
+    lower.includes("系统找不到") ||
+    lower.includes("找不到")
+  ) {
+    if (lower.includes(".py") || lower.includes("script")) {
+      return "script_missing";
+    }
+    return "python_missing";
+  }
+  return "unknown";
+}
+
+export { isRefreshLocked } from "./refreshLock";
+
+/**
+ * 测试 Codex-Usage 数据源：Rust 侧轻量探测，5 秒超时，不拉取完整 stdout。
+ */
+export async function testCodexSource(
+  config: Pick<AppConfig, "pythonCommand" | "codexUsagePath">,
+): Promise<TestSourceResult> {
+  if (isRefreshLocked()) {
+    return { ok: false, status: "exec_failed" };
+  }
+
+  const python = config.pythonCommand.trim();
+  const script = config.codexUsagePath.trim();
+
+  if (!python) {
+    return { ok: false, status: "python_missing" };
+  }
+  if (!script) {
+    return { ok: false, status: "script_missing" };
+  }
+
+  try {
+    const result = await invoke<{
+      ok: boolean;
+      status: string;
+      message: string | null;
+    }>("test_codex_source", {
+      pythonCommand: python,
+      scriptPath: script,
+    });
+
+    if (result.ok) {
+      return { ok: true, status: "success" };
+    }
+
+    switch (result.status) {
+      case "not_configured":
+        return { ok: false, status: "script_missing" };
+      case "script_missing":
+        return { ok: false, status: "script_missing" };
+      case "probe_failed":
+        return { ok: false, status: "probe_failed" as TestSourceStatus };
+      default:
+        return { ok: false, status: "exec_failed" };
+    }
+  } catch (err) {
+    const hints = sanitizeErrorMessage(String(err));
+    const spawnStatus = classifySpawnError(hints);
+    if (spawnStatus !== "unknown") {
+      return { ok: false, status: spawnStatus };
+    }
+    return { ok: false, status: "unknown" };
+  }
 }

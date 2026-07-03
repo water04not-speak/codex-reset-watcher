@@ -4,47 +4,55 @@ Codex Reset Watcher is designed as a local-first utility.
 
 ## What Stays Local
 
-- Configuration values in `%APPDATA%/com.codex-reset-watcher/config.json`
-- Local diagnostic logs
+- Configuration in `%APPDATA%/com.codex-reset-watcher/config.json` (no tokens; includes `sourceMode` and optional `detectedSourceCache` metadata only)
+- Local diagnostic logs under `%APPDATA%/com.codex-reset-watcher/logs/`
 - Parsed reset credit and rate-limit state in app memory
-- The path to the Python command and Codex-Usage script
+- Manual mode: paths to Python and `codex_usage.py`
+
+## v0.2.0 wham adapter boundary
+
+When **auto** mode selects the built-in wham adapter:
+
+- Rust reads `%USERPROFILE%/.codex/auth.json` (or `CODEX_HOME`) **inside the Tauri process only**
+- Access tokens are used for HTTPS calls to Codex wham endpoints and are **not** sent to React, not written to config, and not logged
+- The frontend receives only normalized quota JSON (same shape as script stdout)
 
 ## What Is Logged
 
 Logs may include:
 
-- Operation status
+- Operation status and source kind
 - Duration in milliseconds
-- Exit code
+- Exit code / HTTP status class
 - Timeout status
+- `stdout_len` (length only)
 - Sanitized error summaries
 
 Logs must not include:
 
-- Raw stdout from the Codex-Usage script
-- `auth.json`
-- Tokens
-- Cookies
-- API keys
-- Authorization headers
+- Raw stdout from scripts or adapters
+- `auth.json` contents
+- Tokens, cookies, API keys, authorization headers
 
 ## Sanitization
 
-Sensitive terms such as token, bearer, cookie, API key, authorization, and `sk-...` key-like strings are replaced with `[REDACTED]` before diagnostic text is written.
+Sensitive terms such as token, bearer, cookie, API key, authorization, and `sk-...` key-like strings are replaced with `[REDACTED]` before diagnostic text is written. Log files rotate at 5 MB (previous file kept as `.log.old`).
 
 ## Network Behavior
 
-The app does not upload usage data to a server. It calls the local Python script configured by the user and renders the parsed output locally.
+- **Manual / script mode**: network only if your Codex-Usage script calls wham APIs
+- **Auto wham adapter**: Rust may call `https://chatgpt.com/backend-api/wham/*` (or `chatgpt_base_url` from `config.toml`)
+- No telemetry or usage upload to the watcher project
 
 ## Manual Cleanup
 
-To remove local logs, close the app and delete files under:
+Delete logs:
 
 ```text
 %APPDATA%/com.codex-reset-watcher/logs/
 ```
 
-To reset app settings, delete:
+Reset settings:
 
 ```text
 %APPDATA%/com.codex-reset-watcher/config.json

@@ -1,10 +1,29 @@
 # Data Source
 
-Codex Reset Watcher reads data from a user-configured local Codex-Usage Python script. The app expects the script to support JSON output for the commands below.
+Codex Reset Watcher v0.2.0 supports **automatic source detection** in addition to manual Codex-Usage script configuration.
 
-For local UI testing without a real Codex-Usage installation, use the bundled mock script in [Try with mock data source](#try-with-mock-data-source).
+## Source modes
 
-## Commands
+| Mode | Behavior |
+|------|----------|
+| `auto` (default) | Rust `detect_codex_sources` scans local paths, then tries candidates by confidence |
+| `manual` | User-configured `pythonCommand` + `codexUsagePath` (legacy v0.1 behavior) |
+| `mock` | Bundled `examples/mock-codex-usage.py` for UI verification |
+
+Legacy configs: if `codexUsagePath` is set and `sourceMode` is absent, the app treats the mode as `manual`.
+
+## Auto-detected candidates
+
+| Kind | Description |
+|------|-------------|
+| `codex-usage-script` | Discovered `codex_usage.py` (sibling `tools/Codex-Usage`, repo examples, etc.) |
+| `mock` | `examples/mock-codex-usage.py` |
+| `win-codexbar-compatible` | Rust reads `auth.json` and calls `/wham/usage` + `/wham/rate-limit-reset-credits` |
+| `codex-quota-widget-compatible` | Rust parses recent `%USERPROFILE%/.codex/sessions/**/*.jsonl` rate-limit events |
+
+Tokens and `auth.json` contents **never** reach the React UI or config file.
+
+## Manual script commands
 
 ```bash
 python codex_usage.py all --json
@@ -104,19 +123,15 @@ From the repository root:
 python examples/mock-codex-usage.py all --json
 ```
 
-In the app settings, configure:
-
-- **Python command**: `python`
-- **Codex-Usage script path**: `C:\path\to\codex-reset-watcher\examples\mock-codex-usage.py`
-
-Then click **Refresh**. Mock data is only for verifying the UI and install flow. Real quota data still requires your own Codex-Usage script.
-
-You can also validate the mock script locally:
+In **Settings → Data source**, choose **Demo data** or **Auto-detect** (mock is always listed as a candidate).
 
 ```bash
 npm run verify:mock
+npm run verify:sources
 ```
 
 ## Privacy boundary
 
-The app does not need auth files, cookies, or tokens. If upstream output includes sensitive fields, examples and logs must redact them before sharing.
+The app does not store tokens in config. The optional Rust wham adapter reads `auth.json` only inside the Tauri host process. Examples and logs must redact sensitive fields before sharing.
+
+See also `docs/SOURCE_ADAPTER_RESEARCH.md` and `docs/PRIVACY.md`.

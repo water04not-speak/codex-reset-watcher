@@ -37,6 +37,13 @@ export interface ParseOptions {
 }
 
 const HISTORY_LIMIT = 50;
+const RAW_TEXT_MAX_BYTES = 2048;
+
+function truncateRawText(value: unknown): string {
+  const text = JSON.stringify(value);
+  if (text.length <= RAW_TEXT_MAX_BYTES) return text;
+  return `${text.slice(0, RAW_TEXT_MAX_BYTES)}…[truncated ${text.length - RAW_TEXT_MAX_BYTES} chars]`;
+}
 
 // ---------------------------------------------------------------------------
 // 通用小工具
@@ -210,7 +217,7 @@ function parseWindow(
     remainingPercent,
     resetAt,
     remainingText,
-    rawText: JSON.stringify(raw),
+    rawText: truncateRawText(raw),
     status: computeLimitWindowStatus(remainingPercent),
   };
 }
@@ -291,7 +298,7 @@ export function parseUsageSummary(
         thirtyDayTokens,
         thirtyDayCost: null,
         topModel,
-        rawText: JSON.stringify(local),
+        rawText: truncateRawText(local),
       };
     }
   }
@@ -304,7 +311,7 @@ export function parseUsageSummary(
     thirtyDayTokens: asNumber(usage.thirty_day_tokens),
     thirtyDayCost: asNumber(usage.thirty_day_cost),
     topModel: asString(usage.top_model),
-    rawText: JSON.stringify(usage),
+    rawText: truncateRawText(usage),
   };
 }
 
@@ -413,6 +420,17 @@ export function buildAppState(
     recommendation,
     history,
   };
+}
+
+/** 判断 JSON 根对象是否包含可识别的 Codex-Usage 结构。 */
+export function isRecognizedCodexStructure(root: unknown): boolean {
+  if (!isRecord(root)) return false;
+  if (findCreditsArray(root) !== null) return true;
+  if (findRateLimit(root) !== null) return true;
+  if (findLocalUsage(root) !== null) return true;
+  if (isRecord(root.online_usage)) return true;
+  if (isRecord(root.endpoints)) return true;
+  return false;
 }
 
 /**

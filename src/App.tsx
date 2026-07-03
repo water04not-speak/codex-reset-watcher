@@ -1,102 +1,159 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import "./App.css";
 import { refreshAppState, loadConfig, saveConfig } from "./core/bridge";
 import { normalizeConfig, DEFAULT_CONFIG } from "./core/config";
 import { createInitialAppState } from "./core/parser";
 import type { AppState, AppConfig } from "./core/types";
+import type { ResolvedSource } from "./core/sources/types";
 import { getLanguage, setLanguage, t } from "./i18n";
-import { OverviewCards } from "./components/OverviewCards";
-import { CreditTimeline } from "./components/CreditTimeline";
-import { LiquidGauge } from "./components/LiquidGauge";
-import { RecommendationCard } from "./components/RecommendationCard";
+import { AppHeader } from "./components/AppHeader";
+import type { StatusIndicator } from "./components/AppHeader";
+import { MainContent } from "./components/MainContent";
 import { SettingsModal } from "./components/SettingsModal";
+import { EmptyState } from "./components/EmptyState";
+import { redactPath } from "./core/privacy";
+import { setRefreshLock } from "./core/refreshLock";
 
 function App() {
   const [state, setState] = useState<AppState>(createInitialAppState());
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(false);
-  const [nextRefreshIn, setNextRefreshIn] = useState<number | null>(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
   const [lang, setLangState] = useState(getLanguage());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [resolvedSource, setResolvedSource] = useState<ResolvedSource | null>(
+    null,
+  );
+  const [autoBanner, setAutoBanner] = useState<string | null>(null);
+  const [sourceDetectFailed, setSourceDetectFailed] = useState(false);
 
-  // 加载配置
+  const configRef = useRef(config);
+  const stateRef = useRef(state);
+  const langRef = useRef(lang);
+  const isRefreshingRef = useRef(false);
+  const initialRefreshDone = useRef(false);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    langRef.current = lang;
+  }, [lang]);
+
   useEffect(() => {
     loadConfig().then((loaded) => {
       const normalized = normalizeConfig(loaded ?? DEFAULT_CONFIG);
       setConfig(normalized);
       setLanguage(normalized.language);
       setLangState(normalized.language);
+      setConfigLoaded(true);
     });
   }, []);
 
-  // 刷新数据
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", config.theme);
+    document.documentElement.setAttribute(
+      "data-performance",
+      config.performanceMode ? "true" : "false",
+    );
+  }, [config.theme, config.performanceMode]);
+
   const refresh = useCallback(async () => {
-    if (loading) return;
+    if (isRefreshingRef.current) return;
+    isRefreshingRef.current = true;
+    setRefreshLock(true);
     setLoading(true);
+    setAutoBanner(null);
+    setSourceDetectFailed(false);
+
+    const currentConfig = configRef.current;
+    const currentLang = langRef.current;
+    const previous = stateRef.current;
+
     try {
-      const newState = await refreshAppState(
-        {
-          pythonCommand: config.pythonCommand,
-          codexUsagePath: config.codexUsagePath,
-        },
+      const { state: newState, resolved, detection } = await refreshAppState(
+        currentConfig,
         {
           strategy: "all",
-          lang,
-          previous: state,
-          timeoutSecs: config.commandTimeoutSeconds,
+          lang: currentLang,
+          previous,
+          timeoutSecs: currentConfig.commandTimeoutSeconds,
         },
       );
       setState(newState);
+      setResolvedSource(resolved);
+
+      const hasData =
+        newState.resetCredits.length > 0 ||
+        newState.sessionWindow !== null ||
+        newState.weeklyWindow !== null;
+
+      if (
+        currentConfig.sourceMode === "auto" &&
+        resolved &&
+        hasData
+      ) {
+        setAutoBanner(
+          t("source.autoConnected", currentLang, { label: resolved.label }),
+        );
+      } else if (
+        currentConfig.sourceMode === "auto" &&
+        !hasData &&
+        newState.codex.errors.length > 0
+      ) {
+        setSourceDetectFailed(true);
+        if (detection?.candidates) {
+          setConfig((c) => ({
+            ...c,
+            detectedSourceCache: detection.candidates,
+          }));
+        }
+      }
     } catch (err) {
       console.error("Refresh failed:", err);
+      setSourceDetectFailed(true);
     } finally {
+      isRefreshingRef.current = false;
+      setRefreshLock(false);
       setLoading(false);
     }
-  }, [loading, config, lang, state]);
+  }, []);
 
-  // 自动刷新定时器
   useEffect(() => {
-    const interval = config.refreshIntervalSeconds * 1000;
+    if (!configLoaded) return;
+
+    const intervalMs = config.refreshIntervalSeconds * 1000;
     let timer: number | undefined;
-    let countdownTimer: number | undefined;
 
-    const scheduleRefresh = () => {
-      setNextRefreshIn(interval / 1000);
+    const scheduleNext = () => {
       timer = window.setTimeout(() => {
-        refresh();
-        scheduleRefresh();
-      }, interval);
+        if (isRefreshingRef.current) {
+          scheduleNext();
+          return;
+        }
+        void refresh().finally(scheduleNext);
+      }, intervalMs);
     };
 
-    // 启动倒计时
-    const startCountdown = () => {
-      countdownTimer = window.setInterval(() => {
-        setNextRefreshIn((prev) =>
-          prev !== null && prev > 0 ? prev - 1 : null,
-        );
-      }, 1000);
-    };
-
-    scheduleRefresh();
-    startCountdown();
+    scheduleNext();
 
     return () => {
       if (timer) clearTimeout(timer);
-      if (countdownTimer) clearInterval(countdownTimer);
     };
-  }, [config.refreshIntervalSeconds, refresh]);
+  }, [config.refreshIntervalSeconds, configLoaded, refresh]);
 
-  // 初始刷新（仅在 codexUsagePath 变化时触发）
-  const initialRefreshDone = useRef(false);
   useEffect(() => {
-    if (config.codexUsagePath && !initialRefreshDone.current) {
-      refresh();
-      initialRefreshDone.current = true;
-    }
-  }, [config.codexUsagePath, refresh]);
+    if (!configLoaded || initialRefreshDone.current) return;
+    initialRefreshDone.current = true;
+    void refresh();
+  }, [configLoaded, refresh]);
 
-  // 状态指示器
-  const getStatusIndicator = () => {
+  const statusIndicator = useMemo((): StatusIndicator => {
     if (state.codex.errors.length > 0) return "error";
     const expiringCredits = state.resetCredits.filter(
       (c) => c.status === "expiring",
@@ -106,18 +163,30 @@ function App() {
     );
     if (expiringCredits.length > 0 || tightWindows.length > 0) return "warning";
     return "normal";
-  };
+  }, [state.codex.errors, state.resetCredits, state.sessionWindow, state.weeklyWindow]);
 
-  const formatNextRefresh = () => {
-    if (nextRefreshIn === null) return "-";
-    const minutes = Math.floor(nextRefreshIn / 60);
-    const seconds = nextRefreshIn % 60;
-    return `${minutes}:${String(seconds).padStart(2, "0")}`;
-  };
+  const hasData = useMemo(
+    () =>
+      state.resetCredits.length > 0 ||
+      state.sessionWindow !== null ||
+      state.weeklyWindow !== null,
+    [state.resetCredits, state.sessionWindow, state.weeklyWindow],
+  );
 
-  const lastRefresh = state.codex.lastRefreshAt
-    ? new Date(state.codex.lastRefreshAt).toLocaleTimeString(lang)
-    : t("app.neverRefreshed", lang);
+  const showEmptyState = useMemo(
+    () =>
+      !loading &&
+      !hasData &&
+      (sourceDetectFailed ||
+        (config.sourceMode === "manual" && !config.codexUsagePath.trim())),
+    [loading, hasData, sourceDetectFailed, config.sourceMode, config.codexUsagePath],
+  );
+
+  const displayPath = useCallback(
+    (path: string) =>
+      config.redactPathsInUi !== false ? redactPath(path) : path,
+    [config.redactPathsInUi],
+  );
 
   const handleSaveSettings = async (nextConfig: AppConfig) => {
     const normalized = normalizeConfig(nextConfig);
@@ -126,116 +195,80 @@ function App() {
     setLanguage(normalized.language);
     setLangState(normalized.language);
     setIsSettingsOpen(false);
+    initialRefreshDone.current = false;
+  };
+
+  const handleUseMock = async () => {
+    const next = normalizeConfig({ ...config, sourceMode: "mock" });
+    await saveConfig(next);
+    setConfig(next);
+    setSourceDetectFailed(false);
+    initialRefreshDone.current = false;
+    await refresh();
+  };
+
+  const handleSwitchManual = () => {
+    setIsSettingsOpen(true);
+    setConfig((c) => normalizeConfig({ ...c, sourceMode: "manual" }));
+  };
+
+  const handleRedetect = async () => {
+    const next = normalizeConfig({
+      ...config,
+      sourceMode: "auto",
+      selectedSourceId: null,
+    });
+    await saveConfig(next);
+    setConfig(next);
+    setSourceDetectFailed(false);
+    initialRefreshDone.current = false;
+    await refresh();
   };
 
   return (
-    <div className="app">
-      {/* 顶部栏 */}
-      <header className="app-header">
-        <div className="app-header-left">
-          <h1 className="app-title">{t("app.title", lang)}</h1>
-          <div className={`status-indicator ${getStatusIndicator()}`} />
-          <div className="refresh-info">
-            <div>
-              {t("app.lastRefresh", lang)}: {lastRefresh}
-            </div>
-            <div>
-              {t("app.nextRefresh", lang)}: {formatNextRefresh()}
-            </div>
-          </div>
-        </div>
-        <div className="app-header-right">
-          <button
-            className="btn btn-primary"
-            onClick={refresh}
-            disabled={loading}
-          >
-            {loading ? t("app.refreshing", lang) : t("btn.refreshNow", lang)}
-          </button>
-          <button className="btn" onClick={() => setIsSettingsOpen(true)}>
-            {t("btn.settings", lang)}
-          </button>
-        </div>
-      </header>
+    <div className={`app${isSettingsOpen ? " modal-open" : ""}`}>
+      <AppHeader
+        lang={lang}
+        loading={loading}
+        statusIndicator={statusIndicator}
+        lastRefreshAt={state.codex.lastRefreshAt}
+        refreshIntervalSeconds={config.refreshIntervalSeconds}
+        onRefresh={refresh}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+      />
 
-      {/* 加载状态 */}
-      {loading && state.resetCredits.length === 0 && (
+      {autoBanner && (
+        <div className="source-banner source-banner-success" role="status">
+          {autoBanner}
+        </div>
+      )}
+
+      {loading && !hasData && !showEmptyState && (
         <div className="loading">
           <div className="spinner" />
           <div>{t("app.loadingData", lang)}</div>
         </div>
       )}
 
-      {/* 主内容 */}
-      {!loading || state.resetCredits.length > 0 ? (
-        <>
-          {/* 概览卡片 */}
-          <OverviewCards state={state} lang={lang} />
+      {showEmptyState && (
+        <EmptyState
+          lang={lang}
+          variant={sourceDetectFailed ? "detectFailed" : "setup"}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onUseMock={handleUseMock}
+          onSwitchManual={handleSwitchManual}
+          onRedetect={handleRedetect}
+        />
+      )}
 
-          {/* 车票时间轴 */}
-          <CreditTimeline credits={state.resetCredits} lang={lang} />
-
-          {/* 液柱仪表盘 */}
-          <LiquidGauge
-            sessionWindow={state.sessionWindow}
-            weeklyWindow={state.weeklyWindow}
-            lang={lang}
-          />
-
-          {/* 智能建议 */}
-          <RecommendationCard recommendations={state.recommendation} lang={lang} />
-
-          {/* 调试信息（折叠） */}
-          <div className="card">
-            <details className="details-panel">
-              <summary>{t("debug.title", lang)}</summary>
-              <div>
-                <div
-                  style={{
-                    marginBottom: "8px",
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  {t("debug.source", lang)}: {state.codex.source} |{" "}
-                  {t("debug.usingCache", lang)}:{" "}
-                  {state.codex.isUsingCache
-                    ? t("common.yes", lang)
-                    : t("common.no", lang)}
-                </div>
-                {state.codex.errors.length > 0 && (
-                  <div>
-                    <strong style={{ color: "var(--color-expired)" }}>
-                      {t("debug.errors", lang)}:
-                    </strong>
-                    <pre>{state.codex.errors.join("\n")}</pre>
-                  </div>
-                )}
-                <div>
-                  <strong>{t("debug.configPath", lang)}:</strong>
-                  <pre>
-                    {config.codexUsagePath || t("debug.notConfigured", lang)}
-                  </pre>
-                </div>
-                <div>
-                  <strong>{t("debug.recentHistory", lang)}:</strong>
-                  <div className="history-list">
-                    {state.history.slice(-20).map((h, i) => (
-                      <div
-                        key={i}
-                        className={`history-dot ${h.ok ? "ok" : "fail"}`}
-                        title={`${new Date(h.at).toLocaleString()} - ${
-                          h.ok
-                            ? t("debug.success", lang)
-                            : t("debug.failed", lang)
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </details>
-          </div>
-        </>
+      {!showEmptyState && (!loading || hasData) ? (
+        <MainContent
+          state={state}
+          config={config}
+          lang={lang}
+          resolvedSource={resolvedSource}
+          displayPath={displayPath}
+        />
       ) : null}
 
       {isSettingsOpen && (

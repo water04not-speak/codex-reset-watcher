@@ -1,54 +1,74 @@
+import { memo, useMemo } from "react";
 import type { LanguageCode } from "../core/types";
 import { t } from "../i18n";
+import { IconBulb } from "./Icons";
 
 interface RecommendationCardProps {
   recommendations: string[];
   lang?: LanguageCode;
 }
 
-export function RecommendationCard({
+type RiskLevel = "normal" | "gold" | "alert";
+
+function classifyRecommendation(
+  rec: string,
+  lang: LanguageCode,
+): RiskLevel {
+  if (rec === t("rec.fetchFailed", lang)) return "alert";
+  if (rec === t("rec.allGood", lang)) return "normal";
+
+  const sessionMarker = t("card.sessionWindow", lang);
+  const weeklyMarker = t("card.weeklyWindow", lang);
+  if (rec.includes(sessionMarker) || rec.includes(weeklyMarker)) {
+    return "alert";
+  }
+
+  return "gold";
+}
+
+function getOverallLevel(
+  recommendations: string[],
+  lang: LanguageCode,
+): RiskLevel {
+  const levels = recommendations.map((r) => classifyRecommendation(r, lang));
+  if (levels.includes("alert")) return "alert";
+  if (levels.includes("gold")) return "gold";
+  return "normal";
+}
+
+export const RecommendationCard = memo(function RecommendationCard({
   recommendations,
   lang = "zh-CN",
 }: RecommendationCardProps) {
-  const fetchFailedText = t("rec.fetchFailed", lang);
-  const allGoodText = t("rec.allGood", lang);
+  const items = useMemo(
+    () =>
+      recommendations.length === 0
+        ? [t("rec.allGood", lang)]
+        : recommendations,
+    [recommendations, lang],
+  );
 
-  if (recommendations.length === 0) {
-    return (
-      <div className="card">
-        <div className="card-title">{t("card.recommendationTitle", lang)}</div>
-        <div className="recommendation-list">
-          <div className="recommendation-item type-success">
-            <div className="recommendation-icon">✅</div>
-            <div className="recommendation-text">{allGoodText}</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const level = useMemo(
+    () => getOverallLevel(items, lang),
+    [items, lang],
+  );
+  const prefix = t("rec.prefix", lang);
 
   return (
-    <div className="card">
-      <div className="card-title">{t("card.recommendationTitle", lang)}</div>
-      <div className="recommendation-list">
-        {recommendations.map((rec, index) => {
-          const isError = rec === fetchFailedText;
-          const isSuccess = rec === allGoodText;
-          const type = isError
-            ? "type-error"
-            : isSuccess
-              ? "type-success"
-              : "type-warning";
-          const icon = isError ? "⚠️" : isSuccess ? "✅" : "💡";
-
-          return (
-            <div key={index} className={`recommendation-item ${type}`}>
-              <div className="recommendation-icon">{icon}</div>
-              <div className="recommendation-text">{rec}</div>
+    <div className={`recommendation-bar level-${level}`} role="status">
+      <div className="recommendation-bar-icon">
+        <IconBulb />
+      </div>
+      <div className="recommendation-bar-content">
+        <div className="recommendation-bar-items">
+          {items.map((rec, index) => (
+            <div key={index} className="recommendation-bar-text">
+              <span className="recommendation-bar-prefix">{prefix}</span>
+              {rec}
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </div>
   );
-}
+});

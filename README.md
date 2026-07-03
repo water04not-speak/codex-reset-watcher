@@ -2,7 +2,9 @@
 
 A lightweight Windows desktop app for visualizing Codex reset credit expiration timelines, 5-hour and 7-day rate limit windows, and smart usage recommendations.
 
-**v0.1.0** is the initial public release. Core viewing and refresh flows are available; some settings are stored but not fully applied yet (see [Current limitations](#current-limitations)).
+**v0.2.0** adds automatic Codex source detection (Codex-Usage script, built-in wham adapter, session-log fallback, mock demo). Manual script mode remains available.
+
+**v0.1.x** required manual Python + `codex_usage.py` configuration.
 
 ## ✨ Features
 
@@ -23,10 +25,7 @@ A lightweight Windows desktop app for visualizing Codex reset credit expiration 
 
 1. Download the latest Windows build from the [Releases](https://github.com/water04not-speak/codex-reset-watcher/releases) page.
 2. Run `codex-reset-watcher.exe` or install the MSI/NSIS package.
-3. Open **Settings** and configure:
-   - Python command or executable path
-   - Codex-Usage script path
-   - Refresh interval, with a minimum of 60 seconds
+3. On first launch, **auto-detect** runs by default; use **Settings → Data source** for manual script or demo mode.
 4. Click **Refresh now**.
 
 ### Option B: Run from source
@@ -47,6 +46,8 @@ npm run typecheck
 npm run lint
 npm run build
 npm run verify:mock
+npm run verify:sources
+npm test
 ```
 
 ### Try without a real Codex-Usage script

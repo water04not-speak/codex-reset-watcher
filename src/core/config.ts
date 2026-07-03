@@ -6,7 +6,11 @@
  */
 
 import type { AppConfig, Language, Theme } from "./types";
+import type { SourceMode } from "./sources/types";
 import { SUPPORTED_LANGUAGES } from "../i18n";
+
+/** 配置 schema 版本。 */
+export const CONFIG_VERSION = 2;
 
 /** 自动刷新最小间隔（秒）。低于此值会被夹到 60。 */
 export const MIN_REFRESH_INTERVAL_SECONDS = 60;
@@ -16,6 +20,10 @@ export const DEFAULT_COMMAND_TIMEOUT_SECONDS = 25;
 
 /** 内置默认配置（与 config/default-config.json 对应）。 */
 export const DEFAULT_CONFIG: AppConfig = {
+  configVersion: CONFIG_VERSION,
+  sourceMode: "auto",
+  selectedSourceId: null,
+  detectedSourceCache: [],
   codexUsagePath: "",
   pythonCommand: "python",
   refreshIntervalSeconds: 120,
@@ -25,9 +33,30 @@ export const DEFAULT_CONFIG: AppConfig = {
   language: "zh-CN",
   theme: "dark",
   commandTimeoutSeconds: DEFAULT_COMMAND_TIMEOUT_SECONDS,
+  redactPathsInUi: true,
+  performanceMode: false,
 };
 
 const VALID_THEMES: Theme[] = ["dark", "light"];
+const VALID_SOURCE_MODES: SourceMode[] = ["auto", "manual", "mock"];
+
+function isSourceMode(value: unknown): value is SourceMode {
+  return (
+    typeof value === "string" &&
+    (VALID_SOURCE_MODES as string[]).includes(value)
+  );
+}
+
+/**
+ * 迁移旧版配置：若已设置 codexUsagePath 且无 sourceMode，视为 manual。
+ */
+function migrateSourceMode(p: Partial<AppConfig>): SourceMode {
+  if (isSourceMode(p.sourceMode)) return p.sourceMode;
+  if (typeof p.codexUsagePath === "string" && p.codexUsagePath.trim() !== "") {
+    return "manual";
+  }
+  return DEFAULT_CONFIG.sourceMode ?? "auto";
+}
 
 /** 把刷新间隔夹紧到最小值。 */
 export function clampRefreshInterval(seconds: number): number {
@@ -56,7 +85,18 @@ export function normalizeConfig(
   partial: Partial<AppConfig> | null | undefined,
 ): AppConfig {
   const p = partial ?? {};
+  const sourceMode = migrateSourceMode(p);
   return {
+    configVersion:
+      typeof p.configVersion === "number" ? p.configVersion : CONFIG_VERSION,
+    sourceMode,
+    selectedSourceId:
+      typeof p.selectedSourceId === "string" || p.selectedSourceId === null
+        ? p.selectedSourceId
+        : DEFAULT_CONFIG.selectedSourceId ?? null,
+    detectedSourceCache: Array.isArray(p.detectedSourceCache)
+      ? p.detectedSourceCache
+      : DEFAULT_CONFIG.detectedSourceCache ?? [],
     codexUsagePath:
       typeof p.codexUsagePath === "string"
         ? p.codexUsagePath
@@ -86,5 +126,13 @@ export function normalizeConfig(
       typeof p.commandTimeoutSeconds === "number" && p.commandTimeoutSeconds > 0
         ? Math.floor(p.commandTimeoutSeconds)
         : DEFAULT_COMMAND_TIMEOUT_SECONDS,
+    redactPathsInUi:
+      typeof p.redactPathsInUi === "boolean"
+        ? p.redactPathsInUi
+        : DEFAULT_CONFIG.redactPathsInUi,
+    performanceMode:
+      typeof p.performanceMode === "boolean"
+        ? p.performanceMode
+        : DEFAULT_CONFIG.performanceMode ?? false,
   };
 }

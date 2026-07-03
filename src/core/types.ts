@@ -43,6 +43,8 @@ export interface RawFetchResult {
   durationMs: number;
   /** 已脱敏的错误摘要（宿主层错误 / 非零退出 / 超时）；成功为 null。 */
   error: string | null;
+  /** 输出被截断时的警告信息。 */
+  warning: string | null;
 }
 
 /** 单张重置券的状态分类。 */
@@ -152,8 +154,18 @@ export interface AppState {
   history: HistoryEntry[];
 }
 
+import type { SourceCandidate, SourceMode } from "./sources/types";
+
 /** 应用配置（与 config/default-config.json 结构一致）。 */
 export interface AppConfig {
+  /** 配置 schema 版本；v0.2.0 起为 2。 */
+  configVersion?: number;
+  /** 数据源模式：自动探测 / 手动脚本 / 示例数据。 */
+  sourceMode?: SourceMode;
+  /** 自动模式下用户选定的候选 id。 */
+  selectedSourceId?: string | null;
+  /** 最近一次探测结果缓存（不含敏感信息）。 */
+  detectedSourceCache?: SourceCandidate[];
   /** codex_usage.py 的绝对路径。 */
   codexUsagePath: string;
   /** python 可执行命令（如 "python"）。 */
@@ -172,4 +184,8 @@ export interface AppConfig {
   theme: Theme;
   /** 单次数据源调用超时（秒）；可选，缺省 25。 */
   commandTimeoutSeconds?: number;
+  /** UI 中是否脱敏显示路径；默认 true。 */
+  redactPathsInUi?: boolean;
+  /** 性能模式：禁用复杂动画与重阴影，适合低性能设备。 */
+  performanceMode?: boolean;
 }

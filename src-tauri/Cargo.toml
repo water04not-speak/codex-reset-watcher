@@ -1,6 +1,6 @@
 [package]
 name = "codex-reset-watcher"
-version = "0.1.1"
+version = "0.2.0"
 description = "Local-first desktop watcher for Codex reset credits and rate-limit windows"
 authors = ["codex-reset-watcher contributors"]
 license = "MIT"
@@ -17,8 +17,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+ureq = { version = "2", features = ["json"] }
 # 日志脱敏正则
 regex = "1"
 

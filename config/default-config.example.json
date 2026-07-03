@@ -1,0 +1,16 @@
+{
+  "_comment": "复制此文件为 config/local-config.json（或 user-config.json）并按需修改；local/user 配置不会提交 git。",
+  "_comment_codexUsagePath": "codex_usage.py 的绝对路径。Windows 反斜杠需转义为 \\\\，例如 C:\\\\path\\\\to\\\\codex_usage.py",
+  "codexUsagePath": "<ABSOLUTE_PATH_TO>\\codex_usage.py",
+  "_comment_pythonCommand": "python 可执行命令，通常为 'python' 或 'python3'，也可写绝对路径。",
+  "pythonCommand": "python",
+  "_comment_refreshIntervalSeconds": "自动刷新间隔（秒），最小强制 60，低于会被夹到 60。",
+  "refreshIntervalSeconds": 120,
+  "autoStart": false,
+  "alwaysOnTop": false,
+  "startMinimized": false,
+  "_comment_language": "界面语言：zh-CN | en | ja | zh-TW",
+  "language": "zh-CN",
+  "_comment_theme": "主题：dark | light",
+  "theme": "dark"
+}

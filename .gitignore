@@ -1,0 +1,64 @@
+# Logs
+logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies / build output
+node_modules
+dist
+dist-ssr
+src-tauri/target
+*.local
+
+# Environment / reports
+.env
+.env.*
+reports/
+.playwright-cli/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ---- Security: never commit secrets or personal data ----
+# 用户个人配置（不要提交）
+config/local-config.json
+config/user-config.json
+# 凭据 / 令牌 / 证书
+auth.json
+token*
+cookie*
+*.key
+*.pem
+*.p12
+# 本地数据库 / 个人数据 / 私有截图
+*.sqlite
+personal-data/
+screenshots/private/
+
+# Development tools (regenerable)
+.codegraph/
+.cursor/
+.claude/
+
+# Local machine-specific config
+config/default-config.json
+
+# Private planning and review docs
+CODEX_TASKS.md
+GIT_INIT_TASKS.md
+PROJECT_REVIEW.md
+TASK_COMPLETION_REPORT.md
+docs/OPTIMIZATION_GUIDE.md

@@ -56,9 +56,10 @@ screenshots/private/
 # Local machine-specific config
 config/default-config.json
 
-# Private planning and review docs
+# Private planning and review docs (local only)
 CODEX_TASKS.md
 GIT_INIT_TASKS.md
 PROJECT_REVIEW.md
 TASK_COMPLETION_REPORT.md
 docs/OPTIMIZATION_GUIDE.md
+

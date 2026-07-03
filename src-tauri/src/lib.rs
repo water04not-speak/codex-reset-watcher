@@ -300,19 +300,11 @@ fn run_python(
     })
 }
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        // TODO(UI 阶段): 托盘图标 / 开机自启 / 窗口置顶 / 最小化到托盘 等系统集成在此接入。
         .invoke_handler(tauri::generate_handler![
-            greet,
             fetch_codex_raw,
             read_app_config,
             write_app_config,

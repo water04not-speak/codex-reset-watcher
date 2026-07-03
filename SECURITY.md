@@ -9,7 +9,12 @@
 
 ## Reporting Vulnerabilities
 
-If you discover a security issue, please email `security@example.com`.
+If you discover a security issue, please report it privately before opening a public issue.
+
+Preferred channels:
+
+1. **GitHub Private Vulnerability Reporting** (if enabled for this repository): use the repository's Security tab.
+2. **Repository maintainer contact**: reach the maintainer through the contact options on their GitHub profile or this repository's About section.
 
 Do not open a public issue for vulnerabilities that may expose sensitive local data or operational details.
 

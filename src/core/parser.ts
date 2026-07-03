@@ -98,22 +98,24 @@ function computeRemainingSeconds(
 // 结构定位：兼容 `all --json`（嵌套）与单命令（顶层）两种形态
 // ---------------------------------------------------------------------------
 
-/** 定位包含 credits 数组的容器（resets 顶层，或 all.reset_credits）。 */
-function findCreditsContainer(root: unknown): Record<string, unknown> | null {
+/** 定位 credits 数组（兼容 resets / credits / reset_credits.credits）。 */
+function findCreditsArray(root: unknown): unknown[] | null {
   if (!isRecord(root)) return null;
-  if (Array.isArray(root.credits)) return root;
+  if (Array.isArray(root.resets)) return root.resets;
+  if (Array.isArray(root.credits)) return root.credits;
   const rc = root.reset_credits;
-  if (isRecord(rc) && Array.isArray(rc.credits)) return rc;
+  if (isRecord(rc) && Array.isArray(rc.credits)) return rc.credits;
   return null;
 }
 
-/** 定位 rate_limit 对象（含 primary_window / secondary_window）。 */
+/** 定位 rate_limit 对象（含 primary_window / secondary_window 或 primary / secondary）。 */
 function findRateLimit(root: unknown): Record<string, unknown> | null {
   const candidates: string[][] = [
     ["online_usage", "endpoints", "rate_limit_status", "data", "rate_limit"],
     ["endpoints", "rate_limit_status", "data", "rate_limit"],
     ["data", "rate_limit"],
     ["rate_limit"],
+    ["rate_limits"],
   ];
   for (const path of candidates) {
     const value = getPath(root, path);
@@ -140,9 +142,9 @@ export function parseResetCredits(
   now: Date,
   lang: LanguageCode,
 ): ResetCredit[] {
-  const container = findCreditsContainer(root);
-  if (!container || !Array.isArray(container.credits)) return [];
-  return container.credits.map((raw, index): ResetCredit => {
+  const credits = findCreditsArray(root);
+  if (!credits) return [];
+  return credits.map((raw, index): ResetCredit => {
     const item = isRecord(raw) ? raw : {};
     const sourceStatus = asString(item.status) ?? "unknown";
     const grantedAt = asString(item.granted_at);
@@ -169,14 +171,35 @@ function parseWindow(
   name: "primary" | "secondary",
   raw: unknown,
   lang: LanguageCode,
+  now: Date,
 ): LimitWindow | null {
   if (!isRecord(raw)) return null;
   const usedPercent = asNumber(raw.used_percent);
-  const remainingPercent = usedPercent === null ? null : 100 - usedPercent;
-  const resetAfter = asNumber(raw.reset_after_seconds);
+  const remainingPercentDirect = asNumber(raw.remaining_percent);
+  const remainingPercent =
+    remainingPercentDirect ?? (usedPercent === null ? null : 100 - usedPercent);
+
+  let resetAfter = asNumber(raw.reset_after_seconds);
   const resetAtEpoch = asNumber(raw.reset_at);
-  const resetAt =
+  let resetAt =
     resetAtEpoch === null ? null : new Date(resetAtEpoch * 1000).toISOString();
+  const resetsAtIso = asString(raw.resets_at);
+  if (!resetAt && resetsAtIso) {
+    const parsed = new Date(resetsAtIso);
+    if (!Number.isNaN(parsed.getTime())) {
+      resetAt = parsed.toISOString();
+    }
+  }
+  if (resetAfter === null && resetAt) {
+    const target = new Date(resetAt);
+    if (!Number.isNaN(target.getTime())) {
+      resetAfter = Math.max(
+        0,
+        Math.floor((target.getTime() - now.getTime()) / 1000),
+      );
+    }
+  }
+
   const remainingText =
     resetAfter === null
       ? ""
@@ -196,15 +219,18 @@ function parseWindow(
 export function parseWindows(
   root: unknown,
   lang: LanguageCode,
+  now: Date = new Date(),
 ): {
   sessionWindow: LimitWindow | null;
   weeklyWindow: LimitWindow | null;
 } {
   const rateLimit = findRateLimit(root);
   if (!rateLimit) return { sessionWindow: null, weeklyWindow: null };
+  const primary = rateLimit.primary_window ?? rateLimit.primary;
+  const secondary = rateLimit.secondary_window ?? rateLimit.secondary;
   return {
-    sessionWindow: parseWindow("primary", rateLimit.primary_window, lang),
-    weeklyWindow: parseWindow("secondary", rateLimit.secondary_window, lang),
+    sessionWindow: parseWindow("primary", primary, lang, now),
+    weeklyWindow: parseWindow("secondary", secondary, lang, now),
   };
 }
 
@@ -221,46 +247,64 @@ export function parseUsageSummary(
   root: unknown,
   now: Date,
 ): UsageSummary | null {
+  if (!isRecord(root)) return null;
+
   const local = findLocalUsage(root);
-  if (!local) return null;
+  if (local) {
+    const sessions = isRecord(local.sessions) ? local.sessions : null;
+    const totals =
+      sessions && isRecord(sessions.final_token_totals_sum)
+        ? sessions.final_token_totals_sum
+        : null;
+    const thirtyDayTokens = totals ? asNumber(totals.total_tokens) : null;
 
-  const sessions = isRecord(local.sessions) ? local.sessions : null;
-  const totals =
-    sessions && isRecord(sessions.final_token_totals_sum)
-      ? sessions.final_token_totals_sum
-      : null;
-  const thirtyDayTokens = totals ? asNumber(totals.total_tokens) : null;
+    let todayTokens: number | null = null;
+    if (sessions && Array.isArray(sessions.daily_usage)) {
+      const keys = todayDateKeys(now);
+      const match = sessions.daily_usage.find(
+        (row) =>
+          isRecord(row) &&
+          typeof row.date === "string" &&
+          keys.includes(row.date),
+      );
+      if (isRecord(match)) todayTokens = asNumber(match.total_tokens);
+    }
 
-  let todayTokens: number | null = null;
-  if (sessions && Array.isArray(sessions.daily_usage)) {
-    const keys = todayDateKeys(now);
-    const match = sessions.daily_usage.find(
-      (row) =>
-        isRecord(row) &&
-        typeof row.date === "string" &&
-        keys.includes(row.date),
-    );
-    if (isRecord(match)) todayTokens = asNumber(match.total_tokens);
+    let topModel: string | null = null;
+    const selected = getPath(local, ["sqlite_threads", "selected"]);
+    if (
+      isRecord(selected) &&
+      Array.isArray(selected.by_model) &&
+      selected.by_model.length > 0
+    ) {
+      const first = selected.by_model[0];
+      if (isRecord(first)) topModel = asString(first.model);
+    }
+
+    if (
+      todayTokens !== null ||
+      thirtyDayTokens !== null ||
+      topModel !== null
+    ) {
+      return {
+        todayTokens,
+        thirtyDayTokens,
+        thirtyDayCost: null,
+        topModel,
+        rawText: JSON.stringify(local),
+      };
+    }
   }
 
-  let topModel: string | null = null;
-  const selected = getPath(local, ["sqlite_threads", "selected"]);
-  if (
-    isRecord(selected) &&
-    Array.isArray(selected.by_model) &&
-    selected.by_model.length > 0
-  ) {
-    const first = selected.by_model[0];
-    if (isRecord(first)) topModel = asString(first.model);
-  }
+  const usage = isRecord(root.usage) ? root.usage : null;
+  if (!usage) return null;
 
   return {
-    todayTokens,
-    thirtyDayTokens,
-    // local-usage 不含花费信息，保持 null（花费来自 online/api 层）。
-    thirtyDayCost: null,
-    topModel,
-    rawText: JSON.stringify(local),
+    todayTokens: asNumber(usage.today_tokens),
+    thirtyDayTokens: asNumber(usage.thirty_day_tokens),
+    thirtyDayCost: asNumber(usage.thirty_day_cost),
+    topModel: asString(usage.top_model),
+    rawText: JSON.stringify(usage),
   };
 }
 
@@ -320,7 +364,7 @@ export function buildAppState(
   } else {
     onlineRoot = parseAll();
   }
-  const { sessionWindow, weeklyWindow } = parseWindows(onlineRoot, lang);
+  const { sessionWindow, weeklyWindow } = parseWindows(onlineRoot, lang, now);
 
   // ---- local / usage ----
   let localRoot: unknown | null;

@@ -183,7 +183,7 @@ function App() {
           />
 
           {/* 智能建议 */}
-          <RecommendationCard recommendations={state.recommendation} />
+          <RecommendationCard recommendations={state.recommendation} lang={lang} />
 
           {/* 调试信息（折叠） */}
           <div className="card">

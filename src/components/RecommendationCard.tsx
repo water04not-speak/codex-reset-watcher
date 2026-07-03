@@ -1,20 +1,26 @@
+import type { LanguageCode } from "../core/types";
+import { t } from "../i18n";
+
 interface RecommendationCardProps {
   recommendations: string[];
+  lang?: LanguageCode;
 }
 
 export function RecommendationCard({
   recommendations,
+  lang = "zh-CN",
 }: RecommendationCardProps) {
+  const fetchFailedText = t("rec.fetchFailed", lang);
+  const allGoodText = t("rec.allGood", lang);
+
   if (recommendations.length === 0) {
     return (
       <div className="card">
-        <div className="card-title">💡 智能建议</div>
+        <div className="card-title">{t("card.recommendationTitle", lang)}</div>
         <div className="recommendation-list">
           <div className="recommendation-item type-success">
             <div className="recommendation-icon">✅</div>
-            <div className="recommendation-text">
-              一切正常，暂无需要注意的事项。
-            </div>
+            <div className="recommendation-text">{allGoodText}</div>
           </div>
         </div>
       </div>
@@ -23,12 +29,17 @@ export function RecommendationCard({
 
   return (
     <div className="card">
-      <div className="card-title">💡 智能建议</div>
+      <div className="card-title">{t("card.recommendationTitle", lang)}</div>
       <div className="recommendation-list">
         {recommendations.map((rec, index) => {
-          const isError = rec.includes("失败") || rec.includes("错误");
-          const type = isError ? "type-error" : "type-warning";
-          const icon = isError ? "⚠️" : "💡";
+          const isError = rec === fetchFailedText;
+          const isSuccess = rec === allGoodText;
+          const type = isError
+            ? "type-error"
+            : isSuccess
+              ? "type-success"
+              : "type-warning";
+          const icon = isError ? "⚠️" : isSuccess ? "✅" : "💡";
 
           return (
             <div key={index} className={`recommendation-item ${type}`}>

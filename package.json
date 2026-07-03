@@ -1,7 +1,7 @@
 {
   "name": "codex-reset-watcher",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "verify:mock": "node scripts/verify-mock-data.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

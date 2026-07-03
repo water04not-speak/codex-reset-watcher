@@ -19,25 +19,24 @@ A lightweight Windows desktop app for visualizing Codex reset credit expiration 
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Option A: Download a release build
 
-- Windows 10/11
-- Python 3.x
-- A local Codex-Usage script that can output JSON
-
-### Installation
-
-1. Download the latest Windows build from the repository Releases page.
-2. Run `codex-reset-watcher.exe`.
-3. Open Settings and configure:
+1. Download the latest Windows build from the [Releases](https://github.com/water04not-speak/codex-reset-watcher/releases) page.
+2. Run `codex-reset-watcher.exe` or install the MSI/NSIS package.
+3. Open **Settings** and configure:
    - Python command or executable path
    - Codex-Usage script path
    - Refresh interval, with a minimum of 60 seconds
+4. Click **Refresh now**.
 
-### Development
+### Option B: Run from source
+
+Requirements: Windows 10/11, Node.js 18+, Rust stable, Python 3.x.
 
 ```bash
-npm install
+git clone https://github.com/water04not-speak/codex-reset-watcher.git
+cd codex-reset-watcher
+npm ci
 npm run tauri dev
 ```
 
@@ -47,7 +46,27 @@ Useful checks:
 npm run typecheck
 npm run lint
 npm run build
+npm run verify:mock
 ```
+
+### Try without a real Codex-Usage script
+
+Mock data is included for UI verification only:
+
+```bash
+python examples/mock-codex-usage.py all --json
+```
+
+In **Settings**:
+
+- **Python command**: `python`
+- **Codex-Usage script path**: `C:\path\to\codex-reset-watcher\examples\mock-codex-usage.py`
+
+Then click **Refresh now**.
+
+- Mock data helps verify the interface and install flow.
+- Real quota data still requires your own Codex-Usage script.
+- The app does not read `auth.json`, tokens, or cookies.
 
 ### Build from source
 

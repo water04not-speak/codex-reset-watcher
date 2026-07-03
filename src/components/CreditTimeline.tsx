@@ -1,5 +1,5 @@
 import type { ResetCredit, LanguageCode } from "../core/types";
-import { formatDateTime } from "../i18n";
+import { formatDateTime, t } from "../i18n";
 
 interface CreditTimelineProps {
   credits: ResetCredit[];
@@ -20,10 +20,10 @@ export function CreditTimeline({
   if (credits.length === 0) {
     return (
       <div className="card">
-        <div className="card-title">🎫 Reset Credits 时间轴</div>
+        <div className="card-title">{t("card.timelineTitle", lang)}</div>
         <div className="empty-state">
           <div className="empty-state-icon">🎫</div>
-          <div className="empty-state-text">暂无重置券数据</div>
+          <div className="empty-state-text">{t("timeline.empty", lang)}</div>
         </div>
       </div>
     );
@@ -31,7 +31,7 @@ export function CreditTimeline({
 
   return (
     <div className="card">
-      <div className="card-title">🎫 Reset Credits 时间轴</div>
+      <div className="card-title">{t("card.timelineTitle", lang)}</div>
       <div className="credit-timeline">
         {credits.map((credit) => (
           <div
@@ -40,23 +40,27 @@ export function CreditTimeline({
           >
             <div className="credit-ticket-header">
               <div className="credit-ticket-index">
-                Credit #{credit.index + 1}
+                {t("overview.creditLabel", lang, { index: credit.index + 1 })}
               </div>
               <div className="credit-ticket-status">
                 {STATUS_EMOJI[credit.status]}
               </div>
             </div>
             <div className="credit-ticket-time">
-              {credit.remainingText || "已过期"}
+              {credit.remainingText || t("credit.expired", lang)}
             </div>
             <div className="credit-ticket-expires">
               {credit.expiresAt
-                ? `${formatDateTime(credit.expiresAt, lang)} 到期`
-                : "到期时间未知"}
+                ? t("timeline.expiresAt", lang, {
+                    date: formatDateTime(credit.expiresAt, lang),
+                  })
+                : t("timeline.expiresUnknown", lang)}
             </div>
             {credit.grantedAt && (
               <div className="credit-ticket-meta">
-                授予于 {formatDateTime(credit.grantedAt, lang)}
+                {t("timeline.grantedAt", lang, {
+                  date: formatDateTime(credit.grantedAt, lang),
+                })}
               </div>
             )}
           </div>

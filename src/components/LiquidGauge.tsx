@@ -50,18 +50,18 @@ function LiquidGaugeCard({
       </div>
       <div className="liquid-gauge-info">
         <div>
-          <strong>状态：</strong>
+          <strong>{t("gauge.statusLabel", lang)}</strong>
           {t(`window.${status}`, lang)}
         </div>
         {window.remainingText && (
           <div>
-            <strong>重置：</strong>
+            <strong>{t("gauge.resetLabel", lang)}</strong>
             {window.remainingText}
           </div>
         )}
         {window.usedPercent !== null && (
           <div>
-            <strong>已用：</strong>
+            <strong>{t("gauge.usedLabel", lang)}</strong>
             {Math.round(window.usedPercent)}%
           </div>
         )}
@@ -77,7 +77,7 @@ export function LiquidGauge({
 }: LiquidGaugeProps) {
   return (
     <div className="card">
-      <div className="card-title">🧪 限流窗口状态</div>
+      <div className="card-title">{t("card.gaugeTitle", lang)}</div>
       <div className="liquid-gauge-container">
         <LiquidGaugeCard
           window={sessionWindow}

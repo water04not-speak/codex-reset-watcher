@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-07-04
+
 ### Changed
 
-- Public documentation simplified for a solo-maintained project: user guide, data source, privacy, security, architecture overview, and roadmap only.
+- Simplified the public documentation surface for a solo-maintained project.
+- Removed internal QA, release evidence, source adapter research, and open-box analysis documents from the public documentation set.
+- Added a user-focused guide and a concise public roadmap.
+- Clarified that ordinary Windows users should download the installer or portable exe from Releases instead of the source archive.
+
+### Security
+
+- Reduced public documentation exposure of internal implementation, QA, and troubleshooting details.
+- Kept privacy and data-source documentation at a high level without real credentials, logs, or local secrets.
 
 ## [0.2.1] - 2026-07-03
 
@@ -94,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows installers are unsigned in v0.1.0.
 - No system tray integration yet.
 
+[0.2.2]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.2
 [0.2.1]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.1
 [0.2.0]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.0
 [0.1.1]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.1.1

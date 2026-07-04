@@ -1,6 +1,6 @@
 [package]
 name = "codex-reset-watcher"
-version = "0.2.1"
+version = "0.2.2"
 description = "Local-first desktop watcher for Codex reset credits and rate-limit windows"
 authors = ["codex-reset-watcher contributors"]
 license = "MIT"

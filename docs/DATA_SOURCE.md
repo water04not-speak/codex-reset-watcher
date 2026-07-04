@@ -1,27 +1,42 @@
 # Data Source
 
-Codex Reset Watcher v0.2.0 supports **automatic source detection** in addition to manual Codex-Usage script configuration.
+Codex Reset Watcher v0.2.1 supports **automatic source detection** with a zero-config primary path, plus advanced manual / mock modes.
 
 ## Source modes
 
 | Mode | Behavior |
 |------|----------|
-| `auto` (default) | Rust `detect_codex_sources` scans local paths, then tries candidates by confidence |
-| `manual` | User-configured `pythonCommand` + `codexUsagePath` (legacy v0.1 behavior) |
-| `mock` | Bundled `examples/mock-codex-usage.py` for UI verification |
+| `auto` (default) | Rust `detect_codex_sources` lists candidates; refresh tries **real** sources only by priority |
+| `manual` | Advanced: user-configured `pythonCommand` + `codexUsagePath` |
+| `mock` | Advanced / QA: bundled `examples/mock-codex-usage.py` (**not real quota**) |
 
 Legacy configs: if `codexUsagePath` is set and `sourceMode` is absent, the app treats the mode as `manual`.
 
-## Auto-detected candidates
+## Auto priority (ordinary-user path)
 
-| Kind | Description |
-|------|-------------|
-| `codex-usage-script` | Discovered `codex_usage.py` (sibling `tools/Codex-Usage`, repo examples, etc.) |
-| `mock` | `examples/mock-codex-usage.py` |
-| `win-codexbar-compatible` | Rust reads `auth.json` and calls `/wham/usage` + `/wham/rate-limit-reset-credits` |
-| `codex-quota-widget-compatible` | Rust parses recent `%USERPROFILE%/.codex/sessions/**/*.jsonl` rate-limit events |
+| Priority | Kind | Description |
+|----------|------|-------------|
+| 1 | `win-codexbar-compatible` | Built-in wham adapter (zero-config primary). Auth file presence is enough to recommend; full fetch runs on refresh. |
+| 2 | `codex-quota-widget-compatible` | Session JSONL fallback. Real partial data; missing fields are **not** invented. |
+| 3 | `codex-usage-script` | Discovered `codex_usage.py` (advanced / developer fallback). Must not override available wham. |
+| — | `manual` | Only when `sourceMode=manual`. |
+| last | `mock` | QA / UI troubleshooting only. Never preferred when a real source exists; auto failure does **not** default to mock. |
 
 Tokens and `auth.json` contents **never** reach the React UI or config file.
+
+## Built-in wham adapter
+
+- Resolves `CODEX_HOME` or `%USERPROFILE%\.codex`
+- Reads `auth.json` **inside Rust only** (`tokens.access_token`)
+- Optional `chatgpt_base_url` from `config.toml`
+- `GET /wham/usage` and `GET /wham/rate-limit-reset-credits`
+- User-facing errors:
+  - missing auth → 未检测到本机 Codex 登录状态
+  - 401/403 → Codex 登录可能已失效，请重新登录 Codex
+  - network → 无法连接 Codex API，请检查网络或稍后重试
+  - JSON shape drift → Codex 返回数据结构变化，当前版本可能需要更新
+
+Detection does **not** call the network for ranking when `auth.json` exists (avoids duplicate IO). Refresh performs the real requests.
 
 ## Manual script commands
 
@@ -115,7 +130,7 @@ This example matches what `examples/mock-codex-usage.py` returns and what the pa
 - Missing or unparsable fields become `null`; the UI must not invent values.
 - Errors and raw command failures are surfaced as sanitized messages.
 
-## Try with mock data source
+## Advanced: mock data
 
 From the repository root:
 
@@ -123,7 +138,7 @@ From the repository root:
 python examples/mock-codex-usage.py all --json
 ```
 
-In **Settings → Data source**, choose **Demo data** or **Auto-detect** (mock is always listed as a candidate).
+In **Settings → Data source → Advanced**, choose demo/mock. Auto mode does not fall back to mock on failure.
 
 ```bash
 npm run verify:mock
@@ -132,6 +147,13 @@ npm run verify:sources
 
 ## Privacy boundary
 
-The app does not store tokens in config. The optional Rust wham adapter reads `auth.json` only inside the Tauri host process. Examples and logs must redact sensitive fields before sharing.
+The app does not store tokens in config. The Rust wham adapter reads `auth.json` only inside the Tauri host process. Examples and logs must redact sensitive fields before sharing.
 
-See also `docs/SOURCE_ADAPTER_RESEARCH.md`, `docs/TEST_REPORT.md`, and `docs/PRIVACY.md`.
+Config / logs:
+
+```text
+%APPDATA%\com.codex-reset-watcher.app\config.json
+%APPDATA%\com.codex-reset-watcher.app\logs\
+```
+
+See also `docs/SOURCE_ADAPTER_RESEARCH.md`, `docs/OPEN_BOX_EXPERIENCE.zh-CN.md`, `docs/ZERO_CONFIG_QA.v0.2.1.zh-CN.md`, `docs/TEST_REPORT.md`, and `docs/PRIVACY.md`.

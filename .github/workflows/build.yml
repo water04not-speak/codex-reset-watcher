@@ -29,6 +29,11 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Install dependencies
         run: npm ci
 
@@ -43,6 +48,15 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Verify mock data
+        run: npm run verify:mock
+
+      - name: Verify sources
+        run: npm run verify:sources
+
+      - name: QA system test
+        run: node scripts/qa-system-test.mjs
 
   build-tauri-windows:
     name: Build Tauri App (Windows)
@@ -76,9 +90,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Windows installers are unsigned in v0.1.0.
+      - name: Cargo check
+        working-directory: src-tauri
+        run: cargo check
+
+      - name: Cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy
+
+      - name: Cargo test
+        working-directory: src-tauri
+        run: cargo test
+
+      # Windows installers are unsigned in v0.2.x.
       - name: Build Tauri
         run: npm run tauri build
+
+      - name: Validate Windows release artifacts
+        shell: pwsh
+        run: |
+          $nsis = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis" -Filter "*.exe" -ErrorAction SilentlyContinue
+          $portable = Get-ChildItem -Path "src-tauri/target/release" -Filter "*.exe" -ErrorAction SilentlyContinue
+          $msi = Get-ChildItem -Path "src-tauri/target/release/bundle/msi" -Filter "*.msi" -ErrorAction SilentlyContinue
+
+          if (-not $nsis) {
+            throw "Missing required NSIS installer artifact."
+          }
+
+          if (-not $portable) {
+            throw "Missing required portable exe artifact."
+          }
+
+          if (-not $msi) {
+            Write-Host "MSI artifact not found; v0.2.1 Release does not require MSI for ordinary-user distribution."
+          }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -113,5 +158,4 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            release-artifacts/**/*.msi
             release-artifacts/**/*.exe

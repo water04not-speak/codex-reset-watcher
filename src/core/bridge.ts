@@ -154,6 +154,7 @@ export type TestSourceStatus =
   | "invalid_json"
   | "unrecognized_structure"
   | "empty_output"
+  | "refresh_in_progress"
   | "probe_failed"
   | "unknown";
 
@@ -188,7 +189,7 @@ export async function testCodexSource(
   config: Pick<AppConfig, "pythonCommand" | "codexUsagePath">,
 ): Promise<TestSourceResult> {
   if (isRefreshLocked()) {
-    return { ok: false, status: "exec_failed" };
+    return { ok: false, status: "refresh_in_progress" };
   }
 
   const python = config.pythonCommand.trim();

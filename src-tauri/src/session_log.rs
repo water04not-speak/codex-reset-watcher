@@ -44,9 +44,7 @@ fn parse_window(raw: &Value) -> WindowSnap {
             if let Some(s) = v.as_str() {
                 return Some(s.to_string());
             }
-            v.as_i64().map(|sec| {
-                chrono_like_iso(sec)
-            })
+            v.as_i64().map(|sec| chrono_like_iso(sec))
         });
     WindowSnap {
         used_percent: used,
@@ -85,13 +83,7 @@ fn merge_snap(mut best: QuotaSnap, line: &Value, file_ts: u64) -> QuotaSnap {
     if let Some(s) = secondary {
         let mut w = parse_window(s);
         w.updated_at = file_ts;
-        if best
-            .secondary
-            .as_ref()
-            .map(|b| b.updated_at)
-            .unwrap_or(0)
-            <= file_ts
-        {
+        if best.secondary.as_ref().map(|b| b.updated_at).unwrap_or(0) <= file_ts {
             best.secondary = Some(w);
         }
     }

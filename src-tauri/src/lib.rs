@@ -116,12 +116,7 @@ async fn fetch_codex_raw(
     let args_owned = [args[0].to_string(), args[1].to_string()];
 
     let blocking_result = tauri::async_runtime::spawn_blocking(move || {
-        run_python(
-            &python,
-            &script,
-            &[&args_owned[0], &args_owned[1]],
-            timeout,
-        )
+        run_python(&python, &script, &[&args_owned[0], &args_owned[1]], timeout)
     })
     .await;
 
@@ -184,18 +179,19 @@ async fn fetch_codex_adapter(
     timeout_secs: Option<u64>,
 ) -> RawFetchResult {
     let start = Instant::now();
-    let timeout = timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS).clamp(1, MAX_TIMEOUT_SECS);
+    let timeout = timeout_secs
+        .unwrap_or(DEFAULT_TIMEOUT_SECS)
+        .clamp(1, MAX_TIMEOUT_SECS);
     let adapter_clone = adapter.clone();
     let kind_clone = kind.clone();
 
-    let blocking_result = tauri::async_runtime::spawn_blocking(move || {
-        match adapter_clone.as_str() {
+    let blocking_result =
+        tauri::async_runtime::spawn_blocking(move || match adapter_clone.as_str() {
             "wham" => wham_adapter::fetch_wham_payload(&kind_clone, timeout),
             "session-log" => session_log::fetch_session_payload(&kind_clone, timeout),
             other => Err(format!("unknown adapter: {other}")),
-        }
-    })
-    .await;
+        })
+        .await;
 
     let duration_ms = start.elapsed().as_millis() as u64;
     let result = match blocking_result {
@@ -237,10 +233,18 @@ async fn fetch_codex_adapter(
 
     log_line(
         &app,
-        if result.error.is_some() { "ERROR" } else { "INFO" },
+        if result.error.is_some() {
+            "ERROR"
+        } else {
+            "INFO"
+        },
         &format!(
             "adapter={adapter} kind={} duration_ms={} stdout_len={} warning={:?} error={:?}",
-            result.kind, result.duration_ms, result.stdout.len(), result.warning, result.error
+            result.kind,
+            result.duration_ms,
+            result.stdout.len(),
+            result.warning,
+            result.error
         ),
     );
 
@@ -330,11 +334,28 @@ fn stdout_truncation_warning(original_len: usize, max_bytes: usize) -> Option<St
 }
 
 fn read_limited<R: Read>(mut reader: R, max_bytes: usize) -> (String, bool) {
-    let mut buf = vec![0u8; max_bytes + 1];
-    let read = reader.read(&mut buf).unwrap_or(0);
-    let truncated = read > max_bytes;
-    let len = read.min(max_bytes);
-    let text = String::from_utf8_lossy(&buf[..len]).into_owned();
+    let mut output = Vec::with_capacity(max_bytes.min(64 * 1024));
+    let mut buf = [0u8; 8192];
+    let mut truncated = false;
+
+    loop {
+        let read = match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(_) => break,
+        };
+        let remaining = max_bytes.saturating_sub(output.len());
+
+        if read > remaining {
+            output.extend_from_slice(&buf[..remaining]);
+            truncated = true;
+            break;
+        }
+
+        output.extend_from_slice(&buf[..read]);
+    }
+
+    let text = String::from_utf8_lossy(&output).into_owned();
     (text, truncated)
 }
 
@@ -445,7 +466,42 @@ mod tests {
     use super::*;
     use sanitize::{redact, sanitize_path_for_display};
     use std::fs;
-    use std::io::Write;
+    use std::io::{self, Write};
+
+    struct ChunkedReader {
+        data: Vec<u8>,
+        offset: usize,
+        chunk_size: usize,
+    }
+
+    impl Read for ChunkedReader {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.offset >= self.data.len() {
+                return Ok(0);
+            }
+
+            let remaining = self.data.len() - self.offset;
+            let len = remaining.min(self.chunk_size).min(buf.len());
+            buf[..len].copy_from_slice(&self.data[self.offset..self.offset + len]);
+            self.offset += len;
+            Ok(len)
+        }
+    }
+
+    #[test]
+    fn read_limited_reads_until_eof_for_chunked_stdout() {
+        let data = vec![b'x'; 96 * 1024];
+        let reader = ChunkedReader {
+            data: data.clone(),
+            offset: 0,
+            chunk_size: 8192,
+        };
+
+        let (text, truncated) = read_limited(reader, MAX_STDOUT_BYTES);
+
+        assert!(!truncated);
+        assert_eq!(text.len(), data.len());
+    }
 
     #[test]
     fn log_rotation_moves_old_file() {

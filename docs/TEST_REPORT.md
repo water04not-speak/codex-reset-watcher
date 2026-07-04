@@ -1,7 +1,8 @@
 # Codex Reset Watcher 测试报告
 
-**版本：** 0.2.0  
+**版本：** 0.2.0 + v0.2.1 发布前补丁复测
 **测试日期：** 2026-07-03  
+**MSI 发布策略收口：** 2026-07-04
 **测试角色：** 软件测试工程师（系统测试 / 质量验收）  
 **测试类型：** 静态检查 + 自动化脚本 + 子进程/解析层验证 + 安装包冒烟 + 代码审查（UI 交互项）
 
@@ -16,7 +17,7 @@
 | Rust / cargo | 1.96.1 (2026-06-26) |
 | Python | 3.13.0 |
 | Windows | Windows 10.0.26200 (25H2) |
-| 项目版本 | 0.2.0（`package.json` / `tauri.conf.json`） |
+| 项目版本 | 0.2.1（`package.json` / `tauri.conf.json`；历史 v0.2.0 测试记录保留） |
 | 真实 Codex-Usage 脚本 | 可用（脱敏路径：`E:\...\Codex-Usage\codex_usage.py`） |
 | 真实脚本探测结果 | resets=4，5h/7d 窗口均可解析 |
 
@@ -53,13 +54,13 @@
 | `npm run lint` | **PASS** | 0 error |
 | `npm run typecheck` | **PASS** | |
 | `npm run build` | **PASS** | Vite 生产构建成功 |
-| `npm test` | **PASS** | 18/18（含 `src/core/qa.test.ts` + `sources.test.ts`） |
+| `npm test` | **PASS** | 22/22（含 `refreshProgress.test.ts` + `qa.test.ts` + `sources.test.ts`） |
 | `npm run verify:mock` | **PASS** | all / resets / online-usage / local-usage |
 | `npm run verify:sources` | **PASS** | 9/9 |
 | `node scripts/qa-system-test.mjs` | **PASS** | 23/23 |
 | `cd src-tauri && cargo check` | **PASS** | |
 | `cargo clippy` | **PASS** | 无 error |
-| `cargo test` | **PASS** | 6/6（脱敏、日志轮转、路径清理等） |
+| `cargo test` | **PASS** | 7/7（脱敏、日志轮转、路径清理、分块 stdout 等） |
 | `npm run tauri build` | **PASS** | exe + MSI + NSIS 均生成 |
 
 ---
@@ -207,16 +208,17 @@
 
 | # | 用例 | 结果 | 备注 |
 |---|------|------|------|
-| 1 | NSIS 安装包生成 | **PASS** | `codex-reset-watcher_0.2.0_x64-setup.exe` |
-| 2 | MSI 安装包生成 | **PASS** | `codex-reset-watcher_0.2.0_x64_en-US.msi` |
+| 1 | NSIS 安装包生成 | **PASS** | v0.2.1 普通用户推荐安装包：`codex-reset-watcher_0.2.1_x64-setup.exe` |
+| 2 | MSI 安装包生成 | **PASS** | v0.2.1 MSI 可生成，但普通非管理员静默安装曾失败，暂按管理员 / 企业部署或实验产物处理 |
 | 3 | 安装后启动 | **MANUAL** | 未执行完整安装向导 |
 | 4 | 开始菜单启动 | **MANUAL** | |
 | 5 | 卸载 | **MANUAL** | |
 | 6 | 升级覆盖 | **MANUAL** | |
 | 7 | 配置保留 | **MANUAL** | 配置在 `%APPDATA%` 类 app_config_dir |
 | 8 | 未签名 / SmartScreen | **PASS** | `build.yml` 注明 unsigned；预期有 Windows 提醒 |
-| 9 | Release 产物路径 | **PASS** | `src-tauri/target/release/bundle/{msi,nsis}/` |
-| 10 | GitHub Actions 上传 artifact | **PASS** | workflow 配置 `upload-artifact` msi/exe |
+| 9 | Release 产物路径 | **PASS** | NSIS：`src-tauri/target/release/bundle/nsis/`；portable：`src-tauri/target/release/`；MSI：`src-tauri/target/release/bundle/msi/` |
+| 10 | GitHub Actions artifact | **PASS** | workflow 继续上传 Windows artifact，MSI 可保留为 CI artifact 便于诊断 |
+| 11 | GitHub Release 上传策略 | **PASS** | v0.2.1 tag Release 只上传 `*.exe`（NSIS + portable），不上传 MSI |
 
 **构建产物（本次）：** exe ≈ 12.6 MB。
 
@@ -228,45 +230,96 @@
 
 *本次未发现 P0 问题。*
 
-### P1（建议发布前修复）
+### P1（发布阻塞 / 建议发布前修复）
+
+当前发布阻塞 P1：**0**。
 
 | ID | 描述 | 状态 |
 |----|------|------|
-| P1-1 | **缺少桌面 E2E 自动化**：大量功能/并发/UI 项依赖 MANUAL，回归成本高 | 待规划（Playwright + Tauri 或人工 checklist） |
-| P1-2 | **真实刷新耗时 7–10s**：用户可能误以为卡死 | 建议加强「刷新中」进度提示（已有 spinner/禁用按钮） |
+| P1-1 | **缺少桌面 E2E 自动化**：大量功能/并发/UI 项依赖 MANUAL，回归成本高 | 已由 `MANUAL_QA_CHECKLIST.zh-CN.md` 承接为发布人工验收与后续自动化规划，不阻塞 v0.2.1 |
+| P1-2 | **真实刷新耗时 7–10s**：用户可能误以为卡死 | **v0.2.1 已修复，人工验收 PASS** |
+| P1-3 | **MSI 非管理员静默安装失败**：人工验收中 MSI 返回 1603，日志显示 Error 1925，当前权限不足以完成 all-users 安装 | **已通过 Release 产物策略规避**：v0.2.1 GitHub Release 仅推荐/上传 NSIS 与 portable exe；MSI 暂按管理员 / 企业部署或实验产物处理 |
 
 ### P2（后续优化）
 
 | ID | 描述 |
 |----|------|
 | P2-1 | 本机 `npm ci` 在 esbuild 被锁时 EPERM（环境/杀毒问题） |
-| P2-2 | 刷新进行中点击「测试连接」返回 `exec_failed`，文案不够明确 |
+| P2-2 | 刷新进行中点击「测试连接」返回 `exec_failed`，文案不够明确（**v0.2.1 已修复，人工验收 PASS**） |
 | P2-3 | 30 分钟内存长稳未测 |
 | P2-4 | bundle identifier 以 `.app` 结尾的 macOS 警告（当前仅 Windows 发布） |
 | P2-5 | 高 DPI / 150% 缩放视觉需人工截图归档 |
+| P2-6 | MSI per-user / enterprise installer 策略仍需后续版本完善 |
 
 ---
 
-## 12. 修复建议
+## 12. v0.2.1 发布前复测计划与补充记录
+
+| 项 | v0.2.1 状态 | 复测方式 / 证据 |
+|----|-------------|-----------------|
+| P1-2 慢刷新提示 | **已修复，人工验收 PASS** | 新增独立 `RefreshProgress` 组件；显示「检测数据源 / 连接数据源 / 调用 Codex-Usage / wham / session fallback / 解析额度数据 / 更新界面」阶段文案与 elapsed seconds；elapsed timer 隔离在组件内，不恢复 App 级每秒重渲染。 |
+| P2-2 测试连接冲突文案 | **已修复，人工验收 PASS** | 刷新中设置页测试按钮禁用；竞态路径显示 `settings.testBlockedByRefresh`，不再把刷新锁映射为 `exec_failed`。 |
+| CI 命令覆盖 | **已补强** | Linux job 包含 `npm ci`、`npm run lint`、`npm run typecheck`、`npm run build`、`npm test`、`npm run verify:mock`、`npm run verify:sources`、`node scripts/qa-system-test.mjs`；Windows job 保留 `npm run tauri build` 并加入 Rust check/clippy/test。 |
+| 人工 checklist | **已新增** | 新增 `docs/MANUAL_QA_CHECKLIST.zh-CN.md`，覆盖安装、配置、三数据源模式、并发、主题、缩放、脱敏、NSIS/MSI、卸载、升级、README 截图安全检查。 |
+| MSI 非管理员安装 P1 | **已通过发布策略规避** | 保留人工验收失败事实：当前非管理员静默安装 MSI 返回 1603，MSI 日志为 Error 1925。v0.2.1 Release 主推并上传 NSIS 安装包与便携 exe，MSI 暂不作为普通用户推荐产物；per-user / enterprise installer 策略转入后续版本。 |
+| 是否仍有 P0 | **暂无新增 P0** | 本轮改动未触碰 token 传递、wham Rust-only 边界、原始 stdout 日志策略或数据源架构。 |
+| 是否建议发布 v0.2.1 | **建议发布 v0.2.1** | 自动验证、人工验收主要路径与 NSIS/portable 发布策略均满足 v0.2.1 发布要求；MSI 不再作为普通用户发布阻塞项。 |
+
+### v0.2.1 复测命令
+
+```bash
+npm run lint
+npm run typecheck
+npm run build
+npm test
+npm run verify:mock
+npm run verify:sources
+node scripts/qa-system-test.mjs
+npm run tauri build
+cd src-tauri
+cargo check
+cargo clippy
+cargo test
+```
+
+---
+
+## 13. 修复建议
 
 1. **发布前**：由测试人员按 §4/§6/§9 中 **MANUAL** 项执行一轮 30–45 分钟桌面走查（含连续刷新、设置保存重启、性能模式开关）。
-2. **CI**：在 `build.yml` 增加 `npm test` 与 `node scripts/qa-system-test.mjs`（Linux job 跑 parser/异常；Windows job 跑 Tauri）。
-3. **体验**：刷新耗时 >3s 时在 header 显示「正在调用 Codex-Usage…」细分文案（P1-2）。
-4. **测试连接冲突**：`isRefreshLocked()` 时返回独立 i18n key（如 `settings.testBlockedByRefresh`）（P2-2）。
+2. **CI**：已在 `build.yml` 纳入测试、mock/source 验证与 QA 脚本；后续可继续根据稳定性拆分更细 job。
+3. **体验**：v0.2.1 已加入慢刷新阶段提示，真实 Codex-Usage 场景人工验收 PASS。
+4. **测试连接冲突**：v0.2.1 已加入独立 i18n 文案，刷新中测试按钮禁用已人工验收 PASS。
 5. **长期**：引入 Tauri WebDriver 或官方 `tauri-driver` 覆盖设置保存与并发点击。
 
 ---
 
-## 13. 是否建议发布
+## 14. 零配置开箱即用收口（2026-07-04）
 
-### 结论：**可以发布**（建议在完成一轮 MANUAL 桌面走查后正式发布）
+| 项 | 状态 |
+|----|------|
+| 主路径 wham 优先 | **已落实**（detect confidence / kind_rank；auto 不默认 mock） |
+| 失败体验 / 设置页层级 | **已落实** |
+| 配置/日志路径文档 | **已修正**为 `%APPDATA%\com.codex-reset-watcher.app\...` |
+| MSI P1 处置 | **保留**：Release 推荐 NSIS / portable；MSI admin/enterprise/experimental |
+| ZERO_CONFIG_QA | **PARTIAL**（见 `docs/ZERO_CONFIG_QA.v0.2.1.zh-CN.md`） |
+| OPEN_BOX_EXPERIENCE | **已更新**（`docs/OPEN_BOX_EXPERIENCE.zh-CN.md`） |
+
+文档口径：可写「通常无需配置即可自动读取」；须说明需本机已登录 Codex、网络可达、上游 API 兼容。不得无条件宣称任意环境均可自动读取真实额度。
+
+## 15. 是否建议发布
+
+### 结论：**建议发布 v0.2.1-final（或等价 tag），零配置结论为 PARTIAL**
 
 **理由：**
 
-- 静态检查、单元测试、QA 脚本、真实 Codex-Usage 读取、安装包构建均通过。
+- 静态检查、单元测试、QA 脚本、真实 Codex-Usage 读取、安装包构建均通过（以本轮最终验证为准）。
 - 性能专项修复已落地（倒计时隔离、刷新锁、stdout/rawText 限制、async Python）。
 - 无 P0；安全与隐私项均 PASS。
-- 剩余风险主要为 **未自动化的 UI/安装向导** 与 **真实脚本刷新耗时**，可通过文档说明与人工冒烟降低风险。
+- v0.2.1 已补齐慢刷新提示、测试连接冲突文案、CI 门禁、人工 checklist、零配置主路径与文档收口。
+- MSI 非管理员安装失败事实已保留记录，并通过 Release 产物策略规避：普通用户推荐 NSIS / portable exe，MSI per-user 支持后续继续处理。
+- 零配置 QA 为 **PARTIAL**：代码路径与历史人工验收支持主路径，但本轮未在全新干净配置下完整重跑已登录 Codex 的 portable UI 端到端。
+- 剩余风险主要为 **未自动化的 UI/安装向导** 与 **高 DPI / 长稳人工项**，可通过发布前人工冒烟降低风险。
 
 ---
 

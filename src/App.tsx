@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import { refreshAppState, loadConfig, saveConfig } from "./core/bridge";
 import { normalizeConfig, DEFAULT_CONFIG } from "./core/config";
@@ -11,8 +12,12 @@ import type { StatusIndicator } from "./components/AppHeader";
 import { MainContent } from "./components/MainContent";
 import { SettingsModal } from "./components/SettingsModal";
 import { EmptyState } from "./components/EmptyState";
+import { RefreshProgress } from "./components/RefreshProgress";
 import { redactPath } from "./core/privacy";
 import { setRefreshLock } from "./core/refreshLock";
+
+const DATA_SOURCE_DOCS_URL =
+  "https://github.com/water04not-speak/codex-reset-watcher/blob/main/docs/DATA_SOURCE.md";
 
 function App() {
   const [state, setState] = useState<AppState>(createInitialAppState());
@@ -93,26 +98,33 @@ function App() {
         newState.sessionWindow !== null ||
         newState.weeklyWindow !== null;
 
+      if (currentConfig.sourceMode === "auto") {
+        const detectedAt = new Date().toISOString();
+        setConfig((c) => ({
+          ...c,
+          lastDetectedAt: detectedAt,
+          detectedSourceCache:
+            detection?.candidates ?? c.detectedSourceCache,
+          selectedSourceId:
+            resolved?.candidateId ??
+            detection?.recommended ??
+            c.selectedSourceId,
+        }));
+      }
+
       if (
         currentConfig.sourceMode === "auto" &&
         resolved &&
-        hasData
+        hasData &&
+        resolved.kind !== "mock"
       ) {
-        setAutoBanner(
-          t("source.autoConnected", currentLang, { label: resolved.label }),
-        );
+        setAutoBanner(t("source.autoConnected", currentLang));
       } else if (
         currentConfig.sourceMode === "auto" &&
         !hasData &&
         newState.codex.errors.length > 0
       ) {
         setSourceDetectFailed(true);
-        if (detection?.candidates) {
-          setConfig((c) => ({
-            ...c,
-            detectedSourceCache: detection.candidates,
-          }));
-        }
       }
     } catch (err) {
       console.error("Refresh failed:", err);
@@ -188,41 +200,48 @@ function App() {
     [config.redactPathsInUi],
   );
 
-  const handleSaveSettings = async (nextConfig: AppConfig) => {
+  const applyConfigAndRefresh = async (nextConfig: AppConfig) => {
     const normalized = normalizeConfig(nextConfig);
     await saveConfig(normalized);
+    // Keep ref in sync before refresh to avoid stale sourceMode races.
+    configRef.current = normalized;
     setConfig(normalized);
     setLanguage(normalized.language);
     setLangState(normalized.language);
-    setIsSettingsOpen(false);
-    initialRefreshDone.current = false;
-  };
-
-  const handleUseMock = async () => {
-    const next = normalizeConfig({ ...config, sourceMode: "mock" });
-    await saveConfig(next);
-    setConfig(next);
     setSourceDetectFailed(false);
-    initialRefreshDone.current = false;
     await refresh();
   };
 
+  const handleSaveSettings = async (nextConfig: AppConfig) => {
+    setIsSettingsOpen(false);
+    await applyConfigAndRefresh(nextConfig);
+  };
+
+  const handleUseMock = async () => {
+    await applyConfigAndRefresh({ ...config, sourceMode: "mock" });
+  };
+
   const handleSwitchManual = () => {
+    const next = normalizeConfig({ ...config, sourceMode: "manual" });
+    configRef.current = next;
+    setConfig(next);
     setIsSettingsOpen(true);
-    setConfig((c) => normalizeConfig({ ...c, sourceMode: "manual" }));
   };
 
   const handleRedetect = async () => {
-    const next = normalizeConfig({
+    await applyConfigAndRefresh({
       ...config,
       sourceMode: "auto",
       selectedSourceId: null,
     });
-    await saveConfig(next);
-    setConfig(next);
-    setSourceDetectFailed(false);
-    initialRefreshDone.current = false;
-    await refresh();
+  };
+
+  const handleViewDataSourceDocs = async () => {
+    try {
+      await openUrl(DATA_SOURCE_DOCS_URL);
+    } catch {
+      // opener unavailable in non-Tauri contexts
+    }
   };
 
   return (
@@ -243,11 +262,8 @@ function App() {
         </div>
       )}
 
-      {loading && !hasData && !showEmptyState && (
-        <div className="loading">
-          <div className="spinner" />
-          <div>{t("app.loadingData", lang)}</div>
-        </div>
+      {loading && !showEmptyState && (
+        <RefreshProgress lang={lang} compact={hasData} />
       )}
 
       {showEmptyState && (
@@ -258,6 +274,7 @@ function App() {
           onUseMock={handleUseMock}
           onSwitchManual={handleSwitchManual}
           onRedetect={handleRedetect}
+          onViewDataSourceDocs={handleViewDataSourceDocs}
         />
       )}
 
@@ -275,6 +292,7 @@ function App() {
         <SettingsModal
           config={config}
           lang={lang}
+          refreshInProgress={loading}
           onCancel={() => setIsSettingsOpen(false)}
           onSave={handleSaveSettings}
         />

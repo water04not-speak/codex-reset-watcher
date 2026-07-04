@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { AppConfig, LanguageCode, Theme } from "../core/types";
 import type { SourceCandidate, SourceMode } from "../core/sources/types";
@@ -11,6 +11,7 @@ import { t } from "../i18n";
 interface SettingsModalProps {
   config: AppConfig;
   lang: LanguageCode;
+  refreshInProgress: boolean;
   onCancel: () => void;
   onSave: (config: AppConfig) => Promise<void> | void;
 }
@@ -18,11 +19,18 @@ interface SettingsModalProps {
 const LANGUAGES: LanguageCode[] = ["zh-CN", "en", "ja", "zh-TW"];
 const THEMES: Theme[] = ["dark", "light"];
 const COMING_SOON_FEATURES = new Set(["autoStart", "alwaysOnTop"]);
-const SOURCE_MODES: SourceMode[] = ["auto", "manual", "mock"];
+
+function formatDetectedAt(iso: string | null | undefined, lang: LanguageCode): string {
+  if (!iso) return t("settings.notDetectedYet", lang);
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return t("settings.notDetectedYet", lang);
+  return d.toLocaleString(lang);
+}
 
 export function SettingsModal({
   config,
   lang,
+  refreshInProgress,
   onCancel,
   onSave,
 }: SettingsModalProps) {
@@ -35,6 +43,9 @@ export function SettingsModal({
   );
   const [recommended, setRecommended] = useState<string | null>(null);
   const [showFullPath, setShowFullPath] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(
+    (config.sourceMode ?? "auto") !== "auto",
+  );
   const [testMessage, setTestMessage] = useState<{
     kind: "success" | "error";
     text: string;
@@ -43,6 +54,7 @@ export function SettingsModal({
   useEffect(() => {
     setDraft(config);
     setCandidates(config.detectedSourceCache ?? []);
+    setAdvancedOpen((config.sourceMode ?? "auto") !== "auto");
   }, [config]);
 
   useEffect(() => {
@@ -71,22 +83,24 @@ export function SettingsModal({
     setIsDetecting(true);
     try {
       const result = await detectCodexSources();
+      const now = new Date().toISOString();
       setCandidates(result.candidates);
       setRecommended(result.recommended);
-      updateDraft("detectedSourceCache", result.candidates);
-      if (result.recommended && !draft.selectedSourceId) {
-        updateDraft("selectedSourceId", result.recommended);
-      }
+      setDraft((current) => ({
+        ...current,
+        sourceMode: "auto",
+        detectedSourceCache: result.candidates,
+        lastDetectedAt: now,
+        selectedSourceId:
+          current.selectedSourceId &&
+          result.candidates.some((c) => c.id === current.selectedSourceId)
+            ? current.selectedSourceId
+            : result.recommended,
+      }));
     } finally {
       setIsDetecting(false);
     }
-  }, [draft.selectedSourceId]);
-
-  useEffect(() => {
-    if (draft.sourceMode === "auto" && candidates.length === 0) {
-      void runDetect();
-    }
-  }, [draft.sourceMode, candidates.length, runDetect]);
+  }, []);
 
   const handleSave = async () => {
     const normalized: AppConfig = {
@@ -116,12 +130,18 @@ export function SettingsModal({
         updateDraft("codexUsagePath", selected);
       }
     } catch {
-      // 对话框不可用时静默失败
+      // dialog unavailable
     }
   };
 
   const handleTestConnection = async () => {
-    if (isRefreshLocked()) return;
+    if (refreshInProgress || isRefreshLocked()) {
+      setTestMessage({
+        kind: "error",
+        text: t("settings.testBlockedByRefresh", lang),
+      });
+      return;
+    }
     setIsTesting(true);
     setTestMessage(null);
     try {
@@ -146,7 +166,13 @@ export function SettingsModal({
   };
 
   const handleTestCandidate = async (candidate: SourceCandidate) => {
-    if (isRefreshLocked()) return;
+    if (refreshInProgress || isRefreshLocked()) {
+      setTestMessage({
+        kind: "error",
+        text: t("settings.testBlockedByRefresh", lang),
+      });
+      return;
+    }
     setIsTesting(true);
     setTestMessage(null);
     try {
@@ -155,11 +181,16 @@ export function SettingsModal({
         kind: result.ok ? "success" : "error",
         text: result.ok
           ? t("settings.testSuccess", lang)
-          : t("settings.testError.probe_failed", lang),
+          : result.message || t("settings.testError.probe_failed", lang),
       });
     } finally {
       setIsTesting(false);
     }
+  };
+
+  const setSourceMode = (mode: SourceMode) => {
+    updateDraft("sourceMode", mode);
+    if (mode !== "auto") setAdvancedOpen(true);
   };
 
   const showRedacted = draft.redactPathsInUi !== false;
@@ -167,6 +198,47 @@ export function SettingsModal({
   const scriptDisplay = maskPath
     ? redactPath(draft.codexUsagePath)
     : draft.codexUsagePath;
+
+  const activeCandidate = useMemo(() => {
+    if (draft.selectedSourceId) {
+      return candidates.find((c) => c.id === draft.selectedSourceId) ?? null;
+    }
+    if (recommended) {
+      return candidates.find((c) => c.id === recommended) ?? null;
+    }
+    return candidates.find((c) => c.kind !== "mock") ?? candidates[0] ?? null;
+  }, [candidates, draft.selectedSourceId, recommended]);
+
+  const connectionStatus = useMemo(() => {
+    const mode = draft.sourceMode ?? "auto";
+    if (mode === "mock") return t("settings.connectionMock", lang);
+    if (mode === "manual") {
+      return draft.codexUsagePath.trim()
+        ? t("settings.connectionManual", lang)
+        : t("settings.connectionNone", lang);
+    }
+    if (activeCandidate && activeCandidate.kind !== "mock") {
+      return t("settings.connectionAuto", lang);
+    }
+    return t("settings.connectionNone", lang);
+  }, [draft.sourceMode, draft.codexUsagePath, activeCandidate, lang]);
+
+  const currentSourceLabel =
+    draft.sourceMode === "manual"
+      ? t("settings.sourceMode.manual", lang)
+      : draft.sourceMode === "mock"
+        ? t("settings.sourceMode.mock", lang)
+        : (activeCandidate?.label ?? t("settings.noCandidates", lang));
+
+  const currentPathRaw =
+    draft.sourceMode === "manual"
+      ? draft.codexUsagePath
+      : (activeCandidate?.detectedPath ?? "");
+  const currentPathDisplay = currentPathRaw
+    ? showRedacted
+      ? redactPath(currentPathRaw)
+      : currentPathRaw
+    : t("settings.pathUnavailable", lang);
 
   return (
     <div className="modal-overlay" role="presentation" onClick={onCancel}>
@@ -196,31 +268,42 @@ export function SettingsModal({
           <div className="settings-form">
             <fieldset className="settings-fieldset">
               <legend>{t("settings.sourceSection", lang)}</legend>
-              <div className="settings-options settings-source-modes">
-                {SOURCE_MODES.map((mode) => (
-                  <label key={mode} className="settings-option">
-                    <input
-                      type="radio"
-                      name="sourceMode"
-                      value={mode}
-                      checked={(draft.sourceMode ?? "auto") === mode}
-                      onChange={() => updateDraft("sourceMode", mode)}
-                    />
-                    <span>
-                      {t(`settings.sourceMode.${mode}`, lang)}
-                      {mode === "auto" && (
-                        <span className="settings-badge">
-                          {t("settings.recommended", lang)}
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
 
-            {draft.sourceMode === "auto" && (
-              <div className="settings-source-auto">
+              <div className="settings-source-primary">
+                <label className="settings-option">
+                  <input
+                    type="radio"
+                    name="sourceModePrimary"
+                    checked={(draft.sourceMode ?? "auto") === "auto"}
+                    onChange={() => setSourceMode("auto")}
+                  />
+                  <span>
+                    {t("settings.sourceMode.auto", lang)}
+                    <span className="settings-badge">
+                      {t("settings.recommended", lang)}
+                    </span>
+                  </span>
+                </label>
+
+                <dl className="settings-status-grid">
+                  <div>
+                    <dt>{t("settings.connectionStatus", lang)}</dt>
+                    <dd>{connectionStatus}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("settings.currentSource", lang)}</dt>
+                    <dd>{currentSourceLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("settings.lastDetectedAt", lang)}</dt>
+                    <dd>{formatDetectedAt(draft.lastDetectedAt, lang)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("settings.detectedPath", lang)}</dt>
+                    <dd className="settings-path-value">{currentPathDisplay}</dd>
+                  </div>
+                </dl>
+
                 <div className="settings-detect-row">
                   <button
                     className="btn"
@@ -233,122 +316,174 @@ export function SettingsModal({
                       : t("settings.redetect", lang)}
                   </button>
                 </div>
-                {candidates.length === 0 ? (
-                  <p className="settings-hint">{t("settings.noCandidates", lang)}</p>
-                ) : (
-                  <ul className="settings-candidate-list">
-                    {candidates.map((c) => (
-                      <li
-                        key={c.id}
-                        className={`settings-candidate${
-                          draft.selectedSourceId === c.id
-                            ? " settings-candidate-selected"
-                            : ""
-                        }`}
-                      >
-                        <label className="settings-candidate-main">
-                          <input
-                            type="radio"
-                            name="selectedSource"
-                            checked={draft.selectedSourceId === c.id}
-                            onChange={() => updateDraft("selectedSourceId", c.id)}
-                          />
-                          <span>
-                            <strong>{c.label}</strong>
-                            <span className="settings-candidate-meta">
-                              {t("settings.confidence", lang, {
-                                n: c.confidence,
-                              })}{" "}
-                              · {c.riskLevel}
-                              {recommended === c.id
-                                ? ` · ${t("settings.recommendedPick", lang)}`
-                                : ""}
-                            </span>
-                            <span className="settings-candidate-reason">
-                              {c.reason}
-                            </span>
-                          </span>
-                        </label>
-                        <button
-                          className="btn btn-small"
-                          type="button"
-                          disabled={isTesting}
-                          onClick={() => handleTestCandidate(c)}
-                        >
-                          {t("settings.testConnection", lang)}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </div>
-            )}
+            </fieldset>
 
-            {draft.sourceMode === "mock" && (
-              <p className="settings-hint">{t("settings.mockHint", lang)}</p>
-            )}
+            <details
+              className="settings-advanced"
+              open={advancedOpen}
+              onToggle={(e) =>
+                setAdvancedOpen((e.target as HTMLDetailsElement).open)
+              }
+            >
+              <summary>{t("settings.advancedSection", lang)}</summary>
 
-            {draft.sourceMode === "manual" && (
-              <>
-                <label className="settings-field">
-                  <span>{t("settings.pythonPath", lang)}</span>
-                  <input
-                    value={draft.pythonCommand}
-                    onChange={(event) =>
-                      updateDraft("pythonCommand", event.target.value)
-                    }
-                    placeholder="python"
-                  />
-                </label>
-
-                <label className="settings-field">
-                  <span>{t("settings.scriptPath", lang)}</span>
-                  <div className="settings-path-row">
+              <div className="settings-advanced-body">
+                <div className="settings-options settings-source-modes">
+                  <label className="settings-option">
                     <input
-                      value={scriptDisplay}
-                      readOnly={maskPath}
-                      onChange={(event) =>
-                        updateDraft("codexUsagePath", event.target.value)
-                      }
-                      placeholder="C:\\path\\to\\codex_usage.py"
+                      type="radio"
+                      name="sourceModeAdvanced"
+                      checked={draft.sourceMode === "manual"}
+                      onChange={() => setSourceMode("manual")}
                     />
-                    <button
-                      className="btn"
-                      type="button"
-                      onClick={handleBrowseScript}
-                    >
-                      {t("settings.browseFile", lang)}
-                    </button>
-                  </div>
-                  {draft.codexUsagePath.trim() && showRedacted && (
-                    <div className="settings-path-actions">
+                    <span>{t("settings.sourceMode.manual", lang)}</span>
+                  </label>
+                  <label className="settings-option">
+                    <input
+                      type="radio"
+                      name="sourceModeAdvanced"
+                      checked={draft.sourceMode === "mock"}
+                      onChange={() => setSourceMode("mock")}
+                    />
+                    <span>{t("settings.sourceMode.mock", lang)}</span>
+                  </label>
+                </div>
+
+                {draft.sourceMode === "mock" && (
+                  <p className="settings-hint">{t("settings.mockHint", lang)}</p>
+                )}
+
+                {draft.sourceMode === "manual" && (
+                  <>
+                    <label className="settings-field">
+                      <span>{t("settings.pythonPath", lang)}</span>
+                      <input
+                        value={draft.pythonCommand}
+                        onChange={(event) =>
+                          updateDraft("pythonCommand", event.target.value)
+                        }
+                        placeholder="python"
+                      />
+                    </label>
+
+                    <label className="settings-field">
+                      <span>{t("settings.scriptPath", lang)}</span>
+                      <div className="settings-path-row">
+                        <input
+                          value={scriptDisplay}
+                          readOnly={maskPath}
+                          onChange={(event) =>
+                            updateDraft("codexUsagePath", event.target.value)
+                          }
+                          placeholder="C:\\path\\to\\codex_usage.py"
+                        />
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={handleBrowseScript}
+                        >
+                          {t("settings.browseFile", lang)}
+                        </button>
+                      </div>
+                      {draft.codexUsagePath.trim() && showRedacted && (
+                        <div className="settings-path-actions">
+                          <button
+                            className="btn btn-small"
+                            type="button"
+                            onClick={() => setShowFullPath((v) => !v)}
+                          >
+                            {showFullPath
+                              ? t("settings.hideFullPath", lang)
+                              : t("settings.showFullPath", lang)}
+                          </button>
+                        </div>
+                      )}
+                    </label>
+
+                    <div className="settings-test-row">
                       <button
-                        className="btn btn-small"
+                        className="btn"
                         type="button"
-                        onClick={() => setShowFullPath((v) => !v)}
+                        onClick={handleTestConnection}
+                        disabled={isTesting || isSaving || refreshInProgress}
                       >
-                        {showFullPath
-                          ? t("settings.hideFullPath", lang)
-                          : t("settings.showFullPath", lang)}
+                        {isTesting
+                          ? t("settings.testing", lang)
+                          : t("settings.testConnection", lang)}
                       </button>
                     </div>
-                  )}
-                </label>
+                  </>
+                )}
 
-                <div className="settings-test-row">
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleTestConnection}
-                    disabled={isTesting || isSaving}
-                  >
-                    {isTesting
-                      ? t("settings.testing", lang)
-                      : t("settings.testConnection", lang)}
-                  </button>
-                </div>
-              </>
-            )}
+                {(draft.sourceMode ?? "auto") === "auto" && (
+                  <>
+                    <p className="settings-hint">
+                      {t("settings.candidateListHint", lang)}
+                    </p>
+                    {candidates.length === 0 ? (
+                      <p className="settings-hint">
+                        {t("settings.noCandidates", lang)}
+                      </p>
+                    ) : (
+                      <ul className="settings-candidate-list">
+                        {candidates.map((c) => (
+                          <li
+                            key={c.id}
+                            className={`settings-candidate${
+                              draft.selectedSourceId === c.id
+                                ? " settings-candidate-selected"
+                                : ""
+                            }`}
+                          >
+                            <label className="settings-candidate-main">
+                              <input
+                                type="radio"
+                                name="selectedSource"
+                                checked={draft.selectedSourceId === c.id}
+                                onChange={() =>
+                                  updateDraft("selectedSourceId", c.id)
+                                }
+                              />
+                              <span>
+                                <strong>{c.label}</strong>
+                                <span className="settings-candidate-meta">
+                                  {t("settings.confidence", lang, {
+                                    n: c.confidence,
+                                  })}{" "}
+                                  · {c.kind}
+                                  {recommended === c.id
+                                    ? ` · ${t("settings.recommendedPick", lang)}`
+                                    : ""}
+                                </span>
+                                <span className="settings-candidate-reason">
+                                  {c.reason}
+                                </span>
+                                {c.detectedPath && (
+                                  <span className="settings-candidate-reason">
+                                    {showRedacted
+                                      ? redactPath(c.detectedPath)
+                                      : c.detectedPath}
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                            <button
+                              className="btn btn-small"
+                              type="button"
+                              disabled={isTesting || refreshInProgress}
+                              onClick={() => handleTestCandidate(c)}
+                            >
+                              {t("settings.testConnection", lang)}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+              </div>
+            </details>
 
             {testMessage && (
               <p

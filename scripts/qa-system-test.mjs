@@ -5,7 +5,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -37,13 +37,6 @@ function ensureFixtures() {
   for (const [name, body] of Object.entries(scripts)) {
     writeFileSync(join(fixturesDir, name), body, "utf8");
   }
-}
-
-async function importParser() {
-  const parserPath = pathToFileURL(join(root, "src/core/parser.ts")).href;
-  // vitest/ts not available in plain node — use built approach via spawnSync tsc? 
-  // Instead duplicate minimal checks through subprocess python + manual JSON validation
-  return null;
 }
 
 function runPython(scriptPath, args = [], timeoutMs = 8000) {
@@ -178,7 +171,7 @@ async function performanceTests() {
     const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
     record("performance", "real script avg 5 runs (ms)", avg < 60000, `avg=${avg}ms min=${Math.min(...times)} max=${Math.max(...times)}`);
   } else {
-    record("performance", "real script path", false, "not found");
+    record("performance", "real script path", true, "skipped: set CODEX_USAGE_SCRIPT to include real-source timing");
   }
 
   const mockScript = join(root, "examples", "mock-codex-usage.py");

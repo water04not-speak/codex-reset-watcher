@@ -47,9 +47,11 @@ pub fn sanitize_path_for_display(path: &str) -> String {
 pub fn sanitize_error(input: &str) -> String {
     let mut text = redact(input);
     text = Regex::new(r"[A-Za-z]:\\[^\s]{40,}")
-        .map(|re| re.replace_all(&text, |caps: &regex::Captures| {
-            sanitize_path_for_display(caps.get(0).map(|m| m.as_str()).unwrap_or(""))
-        }))
+        .map(|re| {
+            re.replace_all(&text, |caps: &regex::Captures| {
+                sanitize_path_for_display(caps.get(0).map(|m| m.as_str()).unwrap_or(""))
+            })
+        })
         .map(|s| s.into_owned())
         .unwrap_or(text);
     if text.len() > 240 {

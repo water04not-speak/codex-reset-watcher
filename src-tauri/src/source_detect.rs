@@ -9,7 +9,6 @@ use tauri::AppHandle;
 
 use crate::sanitize::{codex_home_dir, log_line, sanitize_path_for_display};
 use crate::session_log::probe_session_logs;
-use crate::wham_adapter::probe_wham;
 
 const PROBE_TIMEOUT_SECS: u64 = 5;
 
@@ -142,6 +141,17 @@ fn probe_script(python: &str, script: &Path, timeout: Duration) -> bool {
     crate::run_python_probe(python, script, timeout)
 }
 
+/// Stable kind priority when confidence ties (higher = preferred).
+fn kind_rank(kind: &str) -> u8 {
+    match kind {
+        "win-codexbar-compatible" => 100,
+        "codex-quota-widget-compatible" => 80,
+        "codex-usage-script" => 60,
+        "mock" => 10,
+        _ => 0,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn make_script_candidate(
     kind: &str,
@@ -185,62 +195,31 @@ pub fn detect_codex_sources(app: &AppHandle) -> SourceDetectionResult {
     let mut warnings: Vec<String> = Vec::new();
     let timeout = Duration::from_secs(PROBE_TIMEOUT_SECS);
 
-    // mock script — always offer
-    if let Some(mock) = find_script_named(&roots, "mock-codex-usage.py") {
-        let probed = probe_script(&python, &mock, timeout);
-        candidates.push(make_script_candidate(
-            "mock",
-            "示例数据 (mock-codex-usage.py)",
-            &mock,
-            &python,
-            45,
-            "无需登录，适合验证 UI",
-            "low",
-            probed,
-        ));
-    }
-
-    // codex_usage.py
-    if let Some(script) = find_script_named(&roots, "codex_usage.py") {
-        let probed = probe_script(&python, &script, timeout);
-        candidates.push(make_script_candidate(
-            "codex-usage-script",
-            "Codex-Usage 脚本",
-            &script,
-            &python,
-            80,
-            "与 parser 契约完全兼容",
-            "low",
-            probed,
-        ));
-        if !probed {
-            warnings.push("Found codex_usage.py but probe failed".to_string());
-        }
-    }
-
-    // wham adapter
+    // Priority (ordinary-user zero-config first):
+    // 1) built-in wham  2) session-log  3) discovered Codex-Usage  4) mock (QA only)
     let home = codex_home_dir();
-    if home.as_ref().map(|h| h.join("auth.json").is_file()).unwrap_or(false) {
-        let probed = probe_wham(PROBE_TIMEOUT_SECS);
+    if home
+        .as_ref()
+        .map(|h| h.join("auth.json").is_file())
+        .unwrap_or(false)
+    {
+        // Existence-only probe for ranking; full fetch happens on refresh.
+        // Avoid an extra network round-trip during detection.
         candidates.push(SourceCandidate {
             id: "wham:builtin".to_string(),
             kind: "win-codexbar-compatible".to_string(),
             label: "内置 Wham API（Rust）".to_string(),
-            confidence: if probed { 88 } else { 55 },
+            confidence: 95,
             detected_path: home
                 .as_ref()
                 .map(|h| sanitize_path_for_display(&h.to_string_lossy())),
             command_preview: Some("GET /wham/usage + /wham/rate-limit-reset-credits".to_string()),
             risk_level: "medium".to_string(),
-            reason: "读取本地 auth.json（仅 Rust 内存，不暴露给前端）".to_string(),
+            reason: "零配置主路径：读取本地 auth.json（仅 Rust 内存，不暴露给前端）".to_string(),
             python_command: None,
         });
-        if !probed {
-            warnings.push("auth.json present but wham probe failed".to_string());
-        }
     }
 
-    // session logs
     if home
         .as_ref()
         .map(|h| h.join("sessions").is_dir())
@@ -251,19 +230,67 @@ pub fn detect_codex_sources(app: &AppHandle) -> SourceDetectionResult {
             id: "session-log:builtin".to_string(),
             kind: "codex-quota-widget-compatible".to_string(),
             label: "Session JSONL 快照".to_string(),
-            confidence: if probed { 62 } else { 35 },
+            confidence: if probed { 75 } else { 65 },
             detected_path: home
                 .as_ref()
                 .map(|h| sanitize_path_for_display(&h.join("sessions").to_string_lossy())),
             command_preview: Some("scan ~/.codex/sessions/**/*.jsonl".to_string()),
             risk_level: "low".to_string(),
-            reason: "离线日志回退，可能缺少重置券数据".to_string(),
+            reason: "真实数据回退：离线日志，可能缺少重置券字段（不伪造）".to_string(),
             python_command: None,
         });
     }
 
-    candidates.sort_by_key(|b| std::cmp::Reverse(b.confidence));
-    let recommended = candidates.first().map(|c| c.id.clone());
+    let has_wham = candidates
+        .iter()
+        .any(|c| c.kind == "win-codexbar-compatible");
+
+    if let Some(script) = find_script_named(&roots, "codex_usage.py") {
+        // Skip Python probe when zero-config wham is already available.
+        let probed = if has_wham {
+            false
+        } else {
+            probe_script(&python, &script, timeout)
+        };
+        candidates.push(make_script_candidate(
+            "codex-usage-script",
+            "Codex-Usage 脚本（高级）",
+            &script,
+            &python,
+            40,
+            "高级/开发 fallback，不得覆盖可用的 wham",
+            "low",
+            probed,
+        ));
+        if !has_wham && !probed {
+            warnings.push("Found codex_usage.py but probe failed".to_string());
+        }
+    }
+
+    // mock is listed for advanced/QA only; never probe during detect.
+    if let Some(mock) = find_script_named(&roots, "mock-codex-usage.py") {
+        candidates.push(make_script_candidate(
+            "mock",
+            "示例数据（不显示真实额度）",
+            &mock,
+            &python,
+            10,
+            "仅 QA / 界面排查，有真实源时永不优先",
+            "low",
+            false,
+        ));
+    }
+
+    candidates.sort_by(|a, b| {
+        b.confidence
+            .cmp(&a.confidence)
+            .then_with(|| kind_rank(&b.kind).cmp(&kind_rank(&a.kind)))
+    });
+    let recommended = candidates
+        .iter()
+        .find(|c| c.kind != "mock")
+        .or_else(|| candidates.first())
+        .map(|c| c.id.clone());
 
     log_line(
         app,
@@ -306,5 +333,44 @@ mod tests {
         let mut v = vec![a, b];
         v.sort_by(|x, y| y.confidence.cmp(&x.confidence));
         assert_eq!(v[0].confidence, 90);
+    }
+
+    #[test]
+    fn kind_rank_prefers_wham_over_script_and_mock() {
+        assert!(kind_rank("win-codexbar-compatible") > kind_rank("codex-usage-script"));
+        assert!(kind_rank("codex-quota-widget-compatible") > kind_rank("codex-usage-script"));
+        assert!(kind_rank("codex-usage-script") > kind_rank("mock"));
+    }
+
+    #[test]
+    fn recommended_skips_mock_when_real_present() {
+        let mock = SourceCandidate {
+            id: "mock".into(),
+            kind: "mock".into(),
+            label: "mock".into(),
+            confidence: 25,
+            detected_path: None,
+            command_preview: None,
+            risk_level: "low".into(),
+            reason: "".into(),
+            python_command: None,
+        };
+        let wham = SourceCandidate {
+            id: "wham".into(),
+            kind: "win-codexbar-compatible".into(),
+            confidence: 95,
+            ..mock.clone()
+        };
+        let mut candidates = vec![mock, wham];
+        candidates.sort_by(|a, b| {
+            b.confidence
+                .cmp(&a.confidence)
+                .then_with(|| kind_rank(&b.kind).cmp(&kind_rank(&a.kind)))
+        });
+        let recommended = candidates
+            .iter()
+            .find(|c| c.kind != "mock")
+            .map(|c| c.id.as_str());
+        assert_eq!(recommended, Some("wham"));
     }
 }

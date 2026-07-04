@@ -467,7 +467,7 @@ dependencies = [
 
 [[package]]
 name = "codex-reset-watcher"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "regex",
  "serde",

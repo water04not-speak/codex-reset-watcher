@@ -8,6 +8,7 @@ interface EmptyStateProps {
   onUseMock?: () => void;
   onSwitchManual?: () => void;
   onRedetect?: () => void;
+  onViewDataSourceDocs?: () => void;
 }
 
 export function EmptyState({
@@ -17,6 +18,7 @@ export function EmptyState({
   onUseMock,
   onSwitchManual,
   onRedetect,
+  onViewDataSourceDocs,
 }: EmptyStateProps) {
   if (variant === "detectFailed") {
     return (
@@ -27,22 +29,36 @@ export function EmptyState({
         <h2 className="empty-state-title">{t("source.detectFailed", lang)}</h2>
         <p className="empty-state-text">{t("source.detectFailedHint", lang)}</p>
         <div className="empty-state-actions">
-          {onUseMock && (
-            <button className="btn btn-primary" type="button" onClick={onUseMock}>
-              {t("source.useMock", lang)}
+          {onRedetect && (
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={onRedetect}
+            >
+              {t("source.redetect", lang)}
+            </button>
+          )}
+          {onViewDataSourceDocs && (
+            <button
+              className="btn"
+              type="button"
+              onClick={onViewDataSourceDocs}
+            >
+              {t("source.viewDataSourceDocs", lang)}
             </button>
           )}
           {onSwitchManual && (
             <button className="btn" type="button" onClick={onSwitchManual}>
-              {t("source.manualConfig", lang)}
+              {t("source.manualConfigAdvanced", lang)}
             </button>
           )}
-          {onRedetect && (
-            <button className="btn" type="button" onClick={onRedetect}>
-              {t("source.redetect", lang)}
+          {onUseMock && (
+            <button className="btn" type="button" onClick={onUseMock}>
+              {t("source.useMockAdvanced", lang)}
             </button>
           )}
         </div>
+        <p className="empty-state-mock">{t("source.mockNotRealQuota", lang)}</p>
       </div>
     );
   }
@@ -51,8 +67,6 @@ export function EmptyState({
     t("empty.step1", lang),
     t("empty.step2", lang),
     t("empty.step3", lang),
-    t("empty.step4", lang),
-    t("empty.step5", lang),
   ];
 
   return (

@@ -7,7 +7,7 @@
 - Logs are sanitized with a pattern equivalent to `(?i)(token|bearer|cookie|api[_-]?key|authorization|sk-[A-Za-z0-9]{8,})` -> `[REDACTED]`.
 - Logs record source kind, duration, status, `stdout_len`, and sanitized error summaries — **not** raw stdout.
 - No data is uploaded to any server operated by this project.
-- The config file is stored locally at `%APPDATA%/com.codex-reset-watcher/config.json`.
+- The config file is stored locally at `%APPDATA%\com.codex-reset-watcher.app\config.json`.
 
 ## v0.2.0 Auto Adapter Boundary
 

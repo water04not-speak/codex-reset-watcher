@@ -166,6 +166,8 @@ export interface AppConfig {
   selectedSourceId?: string | null;
   /** 最近一次探测结果缓存（不含敏感信息）。 */
   detectedSourceCache?: SourceCandidate[];
+  /** 最近一次自动检测完成时间（ISO）；不含敏感信息。 */
+  lastDetectedAt?: string | null;
   /** codex_usage.py 的绝对路径。 */
   codexUsagePath: string;
   /** python 可执行命令（如 "python"）。 */

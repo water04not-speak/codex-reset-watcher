@@ -24,6 +24,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   sourceMode: "auto",
   selectedSourceId: null,
   detectedSourceCache: [],
+  lastDetectedAt: null,
   codexUsagePath: "",
   pythonCommand: "python",
   refreshIntervalSeconds: 120,
@@ -97,6 +98,10 @@ export function normalizeConfig(
     detectedSourceCache: Array.isArray(p.detectedSourceCache)
       ? p.detectedSourceCache
       : DEFAULT_CONFIG.detectedSourceCache ?? [],
+    lastDetectedAt:
+      typeof p.lastDetectedAt === "string" || p.lastDetectedAt === null
+        ? p.lastDetectedAt
+        : DEFAULT_CONFIG.lastDetectedAt ?? null,
     codexUsagePath:
       typeof p.codexUsagePath === "string"
         ? p.codexUsagePath

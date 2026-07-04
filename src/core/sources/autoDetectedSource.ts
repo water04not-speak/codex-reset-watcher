@@ -9,6 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { buildAppState } from "../parser";
 import type { AppConfig, AppState } from "../types";
 import type { RefreshOptions } from "../bridge";
+import { hasQuotaData } from "./connectionStatus";
 import { adapterStdoutToRawInputs } from "./normalize";
 import { refreshMockSource } from "./mockSource";
 import {
@@ -151,14 +152,10 @@ export async function tryCandidate(
         },
         options,
       );
-      if (
-        state.codex.errors.length > 0 &&
-        state.resetCredits.length === 0 &&
-        !state.sessionWindow
-      ) {
+      if (!hasQuotaData(state)) {
         return {
           ok: false,
-          error: state.codex.errors[0] ?? "Script source failed",
+          error: state.codex.errors[0] ?? "Script source returned no quota data",
         };
       }
       return { ok: true, state, resolved: candidateToResolved(candidate) };
@@ -173,6 +170,12 @@ export async function tryCandidate(
         previous: options.previous,
         now: options.now,
       });
+      if (!hasQuotaData(state)) {
+        return {
+          ok: false,
+          error: state.codex.errors[0] ?? "Wham adapter returned no quota data",
+        };
+      }
       state.codex.source = "adapter:wham";
       return { ok: true, state, resolved: candidateToResolved(candidate) };
     }
@@ -193,6 +196,14 @@ export async function tryCandidate(
         previous: options.previous,
         now: options.now,
       });
+      // Partial session logs without quota must not look like a healthy connection.
+      if (!hasQuotaData(state)) {
+        return {
+          ok: false,
+          error:
+            state.codex.errors[0] ?? "Session-log adapter returned no quota data",
+        };
+      }
       state.codex.source = "adapter:session-log";
       return { ok: true, state, resolved: candidateToResolved(candidate) };
     }

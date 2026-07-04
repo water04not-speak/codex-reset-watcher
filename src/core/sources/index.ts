@@ -8,6 +8,14 @@ export type {
   ResolvedSource,
 } from "./types";
 
+export type { SourceConnectionStatus } from "./connectionStatus";
+export {
+  hasQuotaData,
+  classifyErrorMessage,
+  classifyConnectionStatus,
+  isBlockingConnectionStatus,
+} from "./connectionStatus";
+
 export {
   detectSources,
   sortCandidatesByConfidence,

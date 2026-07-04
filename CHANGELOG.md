@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-04
+
+### Changed
+
+- Added a visible app version in the UI.
+- Improved the empty/login-missing state for users without a usable Codex login.
+- Clarified user-facing setup notes for automatic detection and sample data mode.
+- Tightened release asset selection to avoid uploading historical installers.
+
+### Fixed
+
+- Avoid showing an overly normal empty-data state when Codex login is missing or expired.
+- Improved release hygiene so portable and installer assets are produced from the intended current build outputs.
+
+### Security
+
+- Kept login and credential handling local; no token, cookie, or auth file contents are displayed in the UI or logs.
+
 ## [0.2.2] - 2026-07-04
 
 ### Changed
@@ -104,6 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows installers are unsigned in v0.1.0.
 - No system tray integration yet.
 
+[0.2.3]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.3
 [0.2.2]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.2
 [0.2.1]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.1
 [0.2.0]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.0

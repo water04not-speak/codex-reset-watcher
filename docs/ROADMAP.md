@@ -1,6 +1,6 @@
 # Roadmap
 
-Current version: **v0.2.2**. This roadmap describes intent only and is not a commitment.
+Current version: **v0.2.3**. This roadmap describes intent only and is not a commitment.
 
 ## Positioning
 

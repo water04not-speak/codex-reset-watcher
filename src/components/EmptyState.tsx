@@ -1,14 +1,76 @@
 import type { LanguageCode } from "../core/types";
 import { t } from "../i18n";
 
+export type EmptyStateVariant =
+  | "setup"
+  | "detectFailed"
+  | "needsLogin"
+  | "authExpired"
+  | "networkError";
+
 interface EmptyStateProps {
   lang: LanguageCode;
-  variant?: "setup" | "detectFailed";
+  variant?: EmptyStateVariant;
   onOpenSettings: () => void;
   onUseMock?: () => void;
   onSwitchManual?: () => void;
   onRedetect?: () => void;
   onViewDataSourceDocs?: () => void;
+}
+
+function FailurePanel({
+  lang,
+  titleKey,
+  hintKey,
+  onUseMock,
+  onSwitchManual,
+  onRedetect,
+  onViewDataSourceDocs,
+}: {
+  lang: LanguageCode;
+  titleKey: string;
+  hintKey: string;
+  onUseMock?: () => void;
+  onSwitchManual?: () => void;
+  onRedetect?: () => void;
+  onViewDataSourceDocs?: () => void;
+}) {
+  return (
+    <div className="empty-state empty-state-failure">
+      <div className="empty-state-icon" aria-hidden="true">
+        🔌
+      </div>
+      <h2 className="empty-state-title">{t(titleKey, lang)}</h2>
+      <p className="empty-state-text">{t(hintKey, lang)}</p>
+      <div className="empty-state-actions">
+        {onRedetect && (
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={onRedetect}
+          >
+            {t("source.redetect", lang)}
+          </button>
+        )}
+        {onViewDataSourceDocs && (
+          <button className="btn" type="button" onClick={onViewDataSourceDocs}>
+            {t("source.viewDataSourceDocs", lang)}
+          </button>
+        )}
+        {onSwitchManual && (
+          <button className="btn" type="button" onClick={onSwitchManual}>
+            {t("source.manualConfigAdvanced", lang)}
+          </button>
+        )}
+        {onUseMock && (
+          <button className="btn" type="button" onClick={onUseMock}>
+            {t("source.useMockAdvanced", lang)}
+          </button>
+        )}
+      </div>
+      <p className="empty-state-mock">{t("source.mockNotRealQuota", lang)}</p>
+    </div>
+  );
 }
 
 export function EmptyState({
@@ -20,46 +82,59 @@ export function EmptyState({
   onRedetect,
   onViewDataSourceDocs,
 }: EmptyStateProps) {
+  if (variant === "needsLogin") {
+    return (
+      <FailurePanel
+        lang={lang}
+        titleKey="source.needsLogin"
+        hintKey="source.needsLoginHint"
+        onUseMock={onUseMock}
+        onSwitchManual={onSwitchManual}
+        onRedetect={onRedetect}
+        onViewDataSourceDocs={onViewDataSourceDocs}
+      />
+    );
+  }
+
+  if (variant === "authExpired") {
+    return (
+      <FailurePanel
+        lang={lang}
+        titleKey="source.authExpired"
+        hintKey="source.authExpiredHint"
+        onUseMock={onUseMock}
+        onSwitchManual={onSwitchManual}
+        onRedetect={onRedetect}
+        onViewDataSourceDocs={onViewDataSourceDocs}
+      />
+    );
+  }
+
+  if (variant === "networkError") {
+    return (
+      <FailurePanel
+        lang={lang}
+        titleKey="source.networkError"
+        hintKey="source.networkErrorHint"
+        onUseMock={onUseMock}
+        onSwitchManual={onSwitchManual}
+        onRedetect={onRedetect}
+        onViewDataSourceDocs={onViewDataSourceDocs}
+      />
+    );
+  }
+
   if (variant === "detectFailed") {
     return (
-      <div className="empty-state empty-state-failure">
-        <div className="empty-state-icon" aria-hidden="true">
-          🔌
-        </div>
-        <h2 className="empty-state-title">{t("source.detectFailed", lang)}</h2>
-        <p className="empty-state-text">{t("source.detectFailedHint", lang)}</p>
-        <div className="empty-state-actions">
-          {onRedetect && (
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={onRedetect}
-            >
-              {t("source.redetect", lang)}
-            </button>
-          )}
-          {onViewDataSourceDocs && (
-            <button
-              className="btn"
-              type="button"
-              onClick={onViewDataSourceDocs}
-            >
-              {t("source.viewDataSourceDocs", lang)}
-            </button>
-          )}
-          {onSwitchManual && (
-            <button className="btn" type="button" onClick={onSwitchManual}>
-              {t("source.manualConfigAdvanced", lang)}
-            </button>
-          )}
-          {onUseMock && (
-            <button className="btn" type="button" onClick={onUseMock}>
-              {t("source.useMockAdvanced", lang)}
-            </button>
-          )}
-        </div>
-        <p className="empty-state-mock">{t("source.mockNotRealQuota", lang)}</p>
-      </div>
+      <FailurePanel
+        lang={lang}
+        titleKey="source.detectFailed"
+        hintKey="source.detectFailedHint"
+        onUseMock={onUseMock}
+        onSwitchManual={onSwitchManual}
+        onRedetect={onRedetect}
+        onViewDataSourceDocs={onViewDataSourceDocs}
+      />
     );
   }
 

@@ -11,6 +11,7 @@ import { t } from "../i18n";
 interface SettingsModalProps {
   config: AppConfig;
   lang: LanguageCode;
+  appVersion: string;
   refreshInProgress: boolean;
   onCancel: () => void;
   onSave: (config: AppConfig) => Promise<void> | void;
@@ -30,6 +31,7 @@ function formatDetectedAt(iso: string | null | undefined, lang: LanguageCode): s
 export function SettingsModal({
   config,
   lang,
+  appVersion,
   refreshInProgress,
   onCancel,
   onSave,
@@ -631,22 +633,27 @@ export function SettingsModal({
         </div>
 
         <footer className="settings-actions">
-          <button
-            className="btn"
-            type="button"
-            onClick={onCancel}
-            disabled={isSaving}
-          >
-            {t("btn.cancel", lang)}
-          </button>
-          <button
-            className="btn btn-primary"
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-          >
-            {isSaving ? t("settings.saving", lang) : t("btn.save", lang)}
-          </button>
+          <span className="settings-version">
+            {t("app.version", lang)} v{appVersion}
+          </span>
+          <div className="settings-actions-buttons">
+            <button
+              className="btn"
+              type="button"
+              onClick={onCancel}
+              disabled={isSaving}
+            >
+              {t("btn.cancel", lang)}
+            </button>
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? t("settings.saving", lang) : t("btn.save", lang)}
+            </button>
+          </div>
         </footer>
       </section>
     </div>

@@ -5,7 +5,13 @@ import { refreshAppState, loadConfig, saveConfig } from "./core/bridge";
 import { normalizeConfig, DEFAULT_CONFIG } from "./core/config";
 import { createInitialAppState } from "./core/parser";
 import type { AppState, AppConfig } from "./core/types";
-import type { ResolvedSource } from "./core/sources/types";
+import {
+  classifyConnectionStatus,
+  hasQuotaData,
+  isBlockingConnectionStatus,
+  type ResolvedSource,
+  type SourceConnectionStatus,
+} from "./core/sources";
 import { getLanguage, setLanguage, t } from "./i18n";
 import { AppHeader } from "./components/AppHeader";
 import type { StatusIndicator } from "./components/AppHeader";
@@ -15,11 +21,13 @@ import { EmptyState } from "./components/EmptyState";
 import { RefreshProgress } from "./components/RefreshProgress";
 import { redactPath } from "./core/privacy";
 import { setRefreshLock } from "./core/refreshLock";
+import { useAppVersion } from "./hooks/useAppVersion";
 
 const DATA_SOURCE_DOCS_URL =
   "https://github.com/water04not-speak/codex-reset-watcher/blob/main/docs/DATA_SOURCE.md";
 
 function App() {
+  const appVersion = useAppVersion();
   const [state, setState] = useState<AppState>(createInitialAppState());
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(false);
@@ -29,8 +37,8 @@ function App() {
   const [resolvedSource, setResolvedSource] = useState<ResolvedSource | null>(
     null,
   );
-  const [autoBanner, setAutoBanner] = useState<string | null>(null);
-  const [sourceDetectFailed, setSourceDetectFailed] = useState(false);
+  const [connectionStatus, setConnectionStatus] =
+    useState<SourceConnectionStatus>("idle");
 
   const configRef = useRef(config);
   const stateRef = useRef(state);
@@ -73,8 +81,6 @@ function App() {
     isRefreshingRef.current = true;
     setRefreshLock(true);
     setLoading(true);
-    setAutoBanner(null);
-    setSourceDetectFailed(false);
 
     const currentConfig = configRef.current;
     const currentLang = langRef.current;
@@ -93,10 +99,14 @@ function App() {
       setState(newState);
       setResolvedSource(resolved);
 
-      const hasData =
-        newState.resetCredits.length > 0 ||
-        newState.sessionWindow !== null ||
-        newState.weeklyWindow !== null;
+      const hasData = hasQuotaData(newState);
+      const nextStatus = classifyConnectionStatus({
+        sourceMode: currentConfig.sourceMode ?? "auto",
+        hasData,
+        resolved,
+        errors: newState.codex.errors,
+      });
+      setConnectionStatus(nextStatus);
 
       if (currentConfig.sourceMode === "auto") {
         const detectedAt = new Date().toISOString();
@@ -111,24 +121,10 @@ function App() {
             c.selectedSourceId,
         }));
       }
-
-      if (
-        currentConfig.sourceMode === "auto" &&
-        resolved &&
-        hasData &&
-        resolved.kind !== "mock"
-      ) {
-        setAutoBanner(t("source.autoConnected", currentLang));
-      } else if (
-        currentConfig.sourceMode === "auto" &&
-        !hasData &&
-        newState.codex.errors.length > 0
-      ) {
-        setSourceDetectFailed(true);
-      }
     } catch (err) {
       console.error("Refresh failed:", err);
-      setSourceDetectFailed(true);
+      setConnectionStatus("detectFailed");
+      setResolvedSource(null);
     } finally {
       isRefreshingRef.current = false;
       setRefreshLock(false);
@@ -165,8 +161,23 @@ function App() {
     void refresh();
   }, [configLoaded, refresh]);
 
+  const hasData = useMemo(() => hasQuotaData(state), [state]);
+
   const statusIndicator = useMemo((): StatusIndicator => {
-    if (state.codex.errors.length > 0) return "error";
+    if (
+      connectionStatus === "needsLogin" ||
+      connectionStatus === "authExpired" ||
+      connectionStatus === "mock"
+    ) {
+      return "warning";
+    }
+    if (
+      connectionStatus === "networkError" ||
+      connectionStatus === "detectFailed"
+    ) {
+      return "error";
+    }
+    if (state.codex.errors.length > 0 && !hasData) return "error";
     const expiringCredits = state.resetCredits.filter(
       (c) => c.status === "expiring",
     );
@@ -175,24 +186,49 @@ function App() {
     );
     if (expiringCredits.length > 0 || tightWindows.length > 0) return "warning";
     return "normal";
-  }, [state.codex.errors, state.resetCredits, state.sessionWindow, state.weeklyWindow]);
-
-  const hasData = useMemo(
-    () =>
-      state.resetCredits.length > 0 ||
-      state.sessionWindow !== null ||
-      state.weeklyWindow !== null,
-    [state.resetCredits, state.sessionWindow, state.weeklyWindow],
-  );
+  }, [connectionStatus, state.codex.errors, state.resetCredits, state.sessionWindow, state.weeklyWindow, hasData]);
 
   const showEmptyState = useMemo(
     () =>
       !loading &&
-      !hasData &&
-      (sourceDetectFailed ||
+      (isBlockingConnectionStatus(connectionStatus) ||
         (config.sourceMode === "manual" && !config.codexUsagePath.trim())),
-    [loading, hasData, sourceDetectFailed, config.sourceMode, config.codexUsagePath],
+    [loading, connectionStatus, config.sourceMode, config.codexUsagePath],
   );
+
+  const emptyVariant = useMemo(() => {
+    if (config.sourceMode === "manual" && !config.codexUsagePath.trim()) {
+      return "setup" as const;
+    }
+    switch (connectionStatus) {
+      case "needsLogin":
+        return "needsLogin" as const;
+      case "authExpired":
+        return "authExpired" as const;
+      case "networkError":
+        return "networkError" as const;
+      case "detectFailed":
+        return "detectFailed" as const;
+      default:
+        return "setup" as const;
+    }
+  }, [connectionStatus, config.sourceMode, config.codexUsagePath]);
+
+  const banner = useMemo(() => {
+    if (connectionStatus === "connected") {
+      return {
+        text: t("source.autoConnected", lang),
+        kind: "success" as const,
+      };
+    }
+    if (connectionStatus === "mock") {
+      return {
+        text: t("source.mockBanner", lang),
+        kind: "warning" as const,
+      };
+    }
+    return null;
+  }, [connectionStatus, lang]);
 
   const displayPath = useCallback(
     (path: string) =>
@@ -208,7 +244,7 @@ function App() {
     setConfig(normalized);
     setLanguage(normalized.language);
     setLangState(normalized.language);
-    setSourceDetectFailed(false);
+    setConnectionStatus("idle");
     await refresh();
   };
 
@@ -256,9 +292,12 @@ function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
-      {autoBanner && (
-        <div className="source-banner source-banner-success" role="status">
-          {autoBanner}
+      {banner && (
+        <div
+          className={`source-banner source-banner-${banner.kind}`}
+          role="status"
+        >
+          {banner.text}
         </div>
       )}
 
@@ -269,7 +308,7 @@ function App() {
       {showEmptyState && (
         <EmptyState
           lang={lang}
-          variant={sourceDetectFailed ? "detectFailed" : "setup"}
+          variant={emptyVariant}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onUseMock={handleUseMock}
           onSwitchManual={handleSwitchManual}
@@ -288,10 +327,15 @@ function App() {
         />
       ) : null}
 
+      <footer className="app-version-footer" aria-label={t("app.version", lang)}>
+        {t("app.titleBrand", lang)} {t("app.titleRest", lang)} v{appVersion}
+      </footer>
+
       {isSettingsOpen && (
         <SettingsModal
           config={config}
           lang={lang}
+          appVersion={appVersion}
           refreshInProgress={loading}
           onCancel={() => setIsSettingsOpen(false)}
           onSave={handleSaveSettings}

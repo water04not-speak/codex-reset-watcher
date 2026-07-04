@@ -6,7 +6,9 @@ A lightweight Windows desktop app for visualizing Codex reset credit expiration 
 
 For Windows users already signed into Codex, the app **usually reads real quota automatically** with no Codex-Usage or Python setup. Boundaries: local login required, network reachable, and upstream API shapes compatible.
 
-**v0.2.1** adds slow refresh progress messaging and hardens the zero-config primary path (built-in adapter first).
+**v0.2.3** shows the app version in the UI and makes the “no usable Codex login” state clearer (warning, not a normal empty dashboard).
+
+**v0.2.1** added slow refresh progress messaging and hardened the zero-config primary path (built-in adapter first).
 
 **v0.2.0** added automatic Codex source detection (built-in adapter, session-log fallback, discovered Codex-Usage script, mock demo). Manual script mode remains an advanced fallback.
 
@@ -29,14 +31,17 @@ Screenshot assets may be present under `docs/screenshots/`. To preview the UI wi
 
 ### Option A: Download a release build (recommended)
 
-1. Download the latest Windows build from the [Releases](https://github.com/water04not-speak/codex-reset-watcher/releases) page. Ordinary users should use the NSIS installer (`*-setup.exe`) or the portable `codex-reset-watcher.exe`.
+1. Download the latest Windows build from the [Releases](https://github.com/water04not-speak/codex-reset-watcher/releases) page. Ordinary users should use the NSIS installer (`*-setup.exe`) or the portable `codex-reset-watcher.exe`. You do **not** need the source archive.
 2. Run `codex-reset-watcher.exe` or install the NSIS package.
-3. On first launch, **auto-detect** runs by default. If you are already signed into Codex, real quota usually appears without further setup.
+3. On first launch, **auto-detect** runs by default. If you are already signed into Codex and the network is reachable, real quota usually appears without further setup.
 4. Click **Refresh now** if you want an immediate refresh.
+5. The UI footer and Settings show the app version (for example `v0.2.3`).
 
 Windows installers are **unsigned** in v0.2.x; SmartScreen may show a warning. MSI builds, when present, are for administrator / enterprise deployment and are not recommended for ordinary non-admin installs.
 
-Advanced options (manual Codex-Usage, Python path, demo/mock data) live under **Settings → Data source → Advanced**. Mock data does **not** show real quota.
+If the app reports that no usable Codex login was detected, sign in to Codex on this PC, confirm Codex works normally, then return and refresh. If you previously switched to **demo / mock data**, open **Settings → Data source** and switch back to **Auto-detect** (demo data is not real quota).
+
+Advanced options (manual Codex-Usage, Python path, demo/mock data) live under **Settings → Data source → Advanced**. They are troubleshooting aids only and are **not** required for ordinary users.
 
 ### Option B: Run from source
 

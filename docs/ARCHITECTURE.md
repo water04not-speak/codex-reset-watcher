@@ -1,12 +1,12 @@
-# Architecture
+# Architecture Overview
 
-Codex Reset Watcher is split into a Tauri host, a TypeScript core layer (including the v0.2.0 source adapter), and React UI components.
+Codex Reset Watcher is a Tauri 2 desktop app with three layers:
 
 ```text
 +------------------+      +----------------------+      +------------------+
-| Codex-Usage      | ---> | Tauri Rust host      | ---> | TypeScript core  |
-| script / wham /  |      | detect + spawn +     |      | sources + parse  |
-| session JSONL    |      | adapters + config    |      | + status         |
+| Local Codex data | ---> | Tauri host (Rust)    | ---> | TypeScript core  |
+| (login / logs /  |      | detect, fetch,       |      | route, parse,    |
+|  optional script)|      | config, sanitize     |      | app state        |
 +------------------+      +----------------------+      +------------------+
                                                                   |
                                                                   v
@@ -15,52 +15,25 @@ Codex Reset Watcher is split into a Tauri host, a TypeScript core layer (includi
                                                            +--------------+
 ```
 
-## Rust responsibilities
+## Layers
 
-Modules under `src-tauri/src/`:
+| Layer | Responsibility |
+|-------|----------------|
+| **Rust host** | Source detection, built-in adapter and session-log fallback, optional Python script spawn, config and log I/O, redaction |
+| **TypeScript core** | Source-mode routing, JSON normalization, app state, UI-facing privacy helpers |
+| **React UI** | Timeline, gauges, recommendations, settings, refresh scheduling |
 
-| Module | Role |
-|--------|------|
-| `lib.rs` | Tauri commands, Python spawn, wiring |
-| `source_detect.rs` | `detect_codex_sources()` — scan paths, probe scripts, list candidates |
-| `wham_adapter.rs` | Win-CodexBar-compatible `/wham/*` client (auth in Rust only) |
-| `session_log.rs` | codex-quota-widget-compatible session JSONL fallback |
-| `sanitize.rs` | Redaction, path sanitization, log rotation |
+## Auto-mode data flow
 
-Commands:
+1. Detect local candidates (built-in adapter, session logs, optional scripts).
+2. Prefer real sources by priority; never prefer mock when a real source exists.
+3. Fetch and normalize quota JSON.
+4. Render structured state in the UI.
 
-- `fetch_codex_raw` — spawn configured Python script
-- `fetch_codex_adapter` — wham or session-log adapter
-- `detect_codex_sources` — auto-detection
-- `test_codex_source` — lightweight script probe
-- `read_app_config` / `write_app_config` / `app_log`
+## Privacy boundary
 
-## TypeScript core responsibilities
+- Credentials used by the built-in adapter stay inside the Rust host.
+- The UI receives normalized quota fields only.
+- Logs record status, timing, and sanitized errors — not raw output or secrets.
 
-`src/core/`:
-
-- `bridge.ts` — UI-facing data bridge
-- `sources/` — source mode routing, normalization, auto-detect consumer
-- `parser.ts` — raw JSON → `AppState`
-- `config.ts` — defaults, migration (`sourceMode`, `configVersion`)
-- `privacy.ts` — UI path/error sanitization
-
-## UI responsibilities
-
-- `App.tsx` — refresh scheduling, auto-connect banner, failure empty state
-- `SettingsModal.tsx` — data source section + manual script fields
-- `ErrorBoundary.tsx` — fatal render errors with reload
-
-## Data flow (auto mode)
-
-```text
-detect_codex_sources (Rust)
-  -> pick candidate by confidence
-  -> script: fetch_codex_raw
-     wham: fetch_codex_adapter(wham)
-     session: fetch_codex_adapter(session-log)
-  -> refreshBySourceMode / buildAppState
-  -> AppState -> React
-```
-
-The UI never stores raw stdout in logs. Tokens never cross the IPC boundary.
+See [PRIVACY.md](../PRIVACY.md) and [DATA_SOURCE.md](DATA_SOURCE.md).

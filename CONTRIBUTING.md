@@ -1,43 +1,18 @@
-# Contributing Guide
+# Contributing
 
-## Development Setup
+This project is primarily maintained by a single author.
 
-1. Install Rust 1.70 or newer.
-2. Install **Node.js 20.12+** (Node.js 22 LTS recommended).
-3. Clone the repository.
-4. Run `npm install`.
-5. Run `npm run tauri dev`.
+## Feedback
 
-## Code Style
+- Bug reports and feature ideas are welcome via [GitHub Issues](https://github.com/water04not-speak/codex-reset-watcher/issues).
+- Security issues: report privately using [SECURITY.md](SECURITY.md). Do not post credentials, tokens, or real logs in public issues.
 
-- TypeScript uses ESLint and Prettier.
-- Rust uses `cargo fmt` and `cargo clippy`.
-- UI copy should go through `src/i18n/*.json` instead of being hard-coded.
-- Sensitive examples must be fake or redacted.
+## Code contributions
 
-## Pull Request Process
+If you want to contribute code, please open an Issue first to discuss the change. Unsolicited large pull requests may not be reviewed promptly.
 
-1. Fork the repository.
-2. Create a feature branch:
+When a change is agreed:
 
-   ```bash
-   git checkout -b feat/your-feature
-   ```
-
-3. Commit with clear messages.
-4. Run the checks:
-
-   ```bash
-   npm run typecheck
-   npm run lint
-   ```
-
-5. Open a pull request with a concise description and screenshots for UI changes.
-
-## Adding New Languages
-
-1. Copy `src/i18n/zh-CN.json` to `src/i18n/xx.json`.
-2. Translate every key while preserving placeholders such as `{count}` and `{percent}`.
-3. Add the language code to `SUPPORTED_LANGUAGES` in `src/i18n/index.ts`.
-4. Update `README.md` and `README.zh-CN.md`.
-5. Run `npm run typecheck`.
+1. Keep the scope focused.
+2. Do not commit secrets, real tokens, cookies, auth files, personal paths, or unsanitized logs.
+3. Run `npm run typecheck` and `npm run lint` before opening a pull request.

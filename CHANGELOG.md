@@ -5,27 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Public documentation simplified for a solo-maintained project: user guide, data source, privacy, security, architecture overview, and roadmap only.
+
 ## [0.2.1] - 2026-07-03
 
 ### Added
 
 - Slow refresh progress messaging.
-- Manual desktop QA checklist.
-- Zero-config open-box QA report (`docs/ZERO_CONFIG_QA.v0.2.1.zh-CN.md`) and experience notes (`docs/OPEN_BOX_EXPERIENCE.zh-CN.md`).
 - Settings ordinary-user status panel (connection, current source, last detection, redacted path) with advanced options collapsed.
 - First-failure actions: re-detect, data-source guide, advanced manual Codex-Usage, advanced demo data (not real quota).
 
 ### Changed
 
-- Auto source priority is now **wham → session-log → Codex-Usage script → mock**; mock is never auto-selected when a real source exists, and auto failure does not default to mock.
-- Detection no longer probes Python scripts when built-in wham is available; mock is listed without probing.
-- Wham adapter surfaces stable user errors for missing auth, 401/403, network failure, and JSON schema drift (tokens never reach React/config/logs).
+- Auto source priority is now **built-in adapter → session-log → Codex-Usage script → mock**; mock is never auto-selected when a real source exists, and auto failure does not default to mock.
+- Detection no longer probes Python scripts when the built-in adapter is available; mock is listed without probing.
+- Built-in adapter surfaces stable user errors for missing login, auth failure, network failure, and response shape drift (credentials never reach React, config, or logs).
 - Test connection is disabled or clearly explained during active refresh.
 - CI quality gates include tests and source verification.
-- Release packaging notes were updated for v0.2.1.
 - NSIS installer and portable exe are the recommended Windows release artifacts for ordinary users.
 - MSI is documented as administrator / enterprise deployment only for v0.2.1, and is excluded from GitHub Release uploads until per-user installation is verified.
-- Config/log path documentation uses `%APPDATA%\com.codex-reset-watcher.app\...`.
 
 ### Fixed
 
@@ -37,39 +39,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Automatic Codex source adapter**: auto-detect `codex_usage.py`, mock script, Python launchers, Rust wham API, and session JSONL fallback.
-- TypeScript source layer (`src/core/sources/`) with `auto` / `manual` / `mock` modes.
-- Rust `detect_codex_sources`, `fetch_codex_adapter`, and `test_codex_source` commands.
-- Settings **Data source** section: mode picker, candidate list with confidence, re-detect, per-candidate test.
+- **Automatic Codex source adapter**: auto-detect `codex_usage.py`, mock script, Python launchers, built-in usage API adapter, and session log fallback.
+- TypeScript source layer with `auto` / `manual` / `mock` modes.
+- Settings **Data source** section: mode picker, candidate list, re-detect, per-candidate test.
 - First-run auto-connect banner and failure empty state (demo data / manual / re-detect).
-- `ErrorBoundary` with reload button.
-- Log rotation when `codex-watcher.log` exceeds 5 MB.
-- Vitest tests for parser, adapters, config migration, and source helpers.
-- `docs/SOURCE_ADAPTER_RESEARCH.md` (phase 1 research).
-- Performance mode setting and `docs/TEST_REPORT.md` QA report.
-- `scripts/qa-system-test.mjs` and `src/core/qa.test.ts` for regression checks.
+- Error boundary with reload button.
+- Log rotation for large diagnostic logs.
+- Automated tests for parser, adapters, config migration, and source helpers.
+- Data source documentation and performance mode setting.
 
 ### Changed
 
-- Default `sourceMode` is `auto`; legacy configs with `codexUsagePath` migrate to `manual`.
-- `refreshAppState` routes through source mode instead of requiring manual script path.
-- `config/default-config.json` no longer ships a developer-specific script path.
-- UI performance: isolated countdown header, `React.memo` on main cards, lazy debug panel, reduced backdrop-filter in scroll area.
-- `fetch_codex_raw` runs on a blocking thread pool; stdout/stderr size limits with truncation warnings.
-- `rawText` in parsed state capped at 2 KB; test connection uses lightweight Rust probe.
+- Default `sourceMode` is `auto`; legacy configs with a script path migrate to `manual`.
+- Refresh routes through source mode instead of requiring a manual script path.
+- Default config no longer ships a developer-specific script path.
+- UI performance improvements for countdown, cards, and scroll area.
+- Script fetch runs off the UI thread; output size limits with truncation warnings.
 - Documentation synced for v0.2.0 source and privacy model.
 
 ### Security
 
-- `auth.json` read only inside Rust wham adapter; never returned to React or stored in config.
-- Probe/detection logs record status and duration only, never raw stdout.
+- Local Codex login is read only inside the Rust host; never returned to React or stored in config.
+- Detection logs record status and duration only, never raw output.
 
 ## [0.1.1] - 2026-07-03
 
 ### Added
 
-- Bundled `examples/mock-codex-usage.py` for local UI testing without real quota data.
-- `npm run verify:mock` to validate mock JSON output.
+- Bundled mock script for local UI testing without real quota data.
+- Mock verification script.
 - Issue/PR templates and expanded first-run documentation.
 
 ### Changed

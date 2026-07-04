@@ -1,28 +1,28 @@
 # Security Policy
 
-## Data Handling
+## Data handling
 
-- This app does **NOT** store `auth.json`, tokens, cookies, API keys, or other credentials in the config file.
-- **Manual script mode**: the app invokes only the local Python script paths you configure.
-- Logs are sanitized with a pattern equivalent to `(?i)(token|bearer|cookie|api[_-]?key|authorization|sk-[A-Za-z0-9]{8,})` -> `[REDACTED]`.
-- Logs record source kind, duration, status, `stdout_len`, and sanitized error summaries — **not** raw stdout.
+- This app does **not** store local Codex login files, tokens, cookies, API keys, or other credentials in its config file.
+- **Manual script mode:** the app invokes only the local Python script paths you configure.
+- Logs are sanitized before write. Patterns that look like tokens, bearer credentials, cookies, API keys, or authorization material are replaced with `[REDACTED]`.
+- Logs record source kind, duration, status, output length, and sanitized error summaries — **not** raw output.
 - No data is uploaded to any server operated by this project.
-- The config file is stored locally at `%APPDATA%\com.codex-reset-watcher.app\config.json`.
+- Settings are stored only in this application's local Windows app data directory.
 
-## v0.2.0 Auto Adapter Boundary
+## Built-in adapter boundary
 
-When **auto** mode selects the built-in wham adapter:
+When **auto** mode selects the built-in adapter:
 
-- Rust may read `%USERPROFILE%/.codex/auth.json` or `CODEX_HOME/auth.json` **inside the Tauri process only**
-- Access tokens are used for HTTPS calls to Codex wham endpoints and are **not** sent to React, not written to config, and not logged
-- The frontend receives only normalized quota JSON (equivalent to script stdout shapes)
-- If upstream Codex APIs or JSON schemas change, auto adapters may stop working until the app is updated
+- The Rust host may read the local Codex login file **inside the app process only**
+- Credentials are used for HTTPS calls to Codex usage endpoints and are **not** sent to the React UI, not written to config, and not logged
+- The UI receives only normalized quota fields
+- If upstream Codex APIs or response shapes change, auto adapters may stop working until the app is updated
 
-Session-log fallback reads local Codex session JSONL files for rate-limit events; it does not expose raw auth material to the UI.
+Session-log fallback reads local Codex session logs for rate-limit events; it does not expose credentials to the UI.
 
-See [docs/PRIVACY.md](docs/PRIVACY.md) for the full privacy model.
+See [PRIVACY.md](PRIVACY.md) for the full privacy model.
 
-## Reporting Vulnerabilities
+## Reporting vulnerabilities
 
 If you discover a security issue, please report it privately before opening a public issue.
 
@@ -33,9 +33,9 @@ Preferred channels:
 
 Do not open a public issue for vulnerabilities that may expose sensitive local data or operational details.
 
-## Out of Scope
+## Out of scope
 
-- Vulnerabilities in the external Codex-Usage script
+- Vulnerabilities in an external Codex-Usage script you configure
 - System-level attacks against Windows, Python, Node.js, Rust, or Tauri
 - Abuse cases that require already-compromised local administrator access
 - Quota interpretation mistakes caused by upstream data shape changes

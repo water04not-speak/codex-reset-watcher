@@ -147,6 +147,9 @@ jobs:
           }
 
           $stage = "release-stage"
+          if (Test-Path -LiteralPath $stage) {
+            Remove-Item -LiteralPath $stage -Recurse -Force
+          }
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
           Copy-Item -Force $portableSrc (Join-Path $stage "codex-reset-watcher.exe")
           Copy-Item -Force $nsisSrc (Join-Path $stage $nsisPattern)

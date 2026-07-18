@@ -121,6 +121,12 @@ function normalizeTime(value: unknown, fallback: string): string {
     : fallback;
 }
 
+function normalizePositiveHours(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.min(8_760, Math.round(value))
+    : fallback;
+}
+
 export function normalizeNotificationConfig(
   value: unknown,
 ): NotificationConfig {
@@ -131,6 +137,17 @@ export function normalizeNotificationConfig(
   const rules: Partial<NotificationConfig["rules"]> = source.rules ?? {};
   const dnd: Partial<NotificationConfig["doNotDisturb"]> =
     source.doNotDisturb ?? {};
+  const expiryWarningHours = normalizePositiveHours(
+    source.expiryWarningHours,
+    DEFAULT_NOTIFICATION_CONFIG.expiryWarningHours,
+  );
+  const urgentExpiryHours = Math.min(
+    normalizePositiveHours(
+      source.urgentExpiryHours,
+      DEFAULT_NOTIFICATION_CONFIG.urgentExpiryHours,
+    ),
+    expiryWarningHours,
+  );
   return {
     enabled:
       typeof source.enabled === "boolean"
@@ -140,16 +157,8 @@ export function normalizeNotificationConfig(
       typeof source.paused === "boolean"
         ? source.paused
         : DEFAULT_NOTIFICATION_CONFIG.paused,
-    expiryWarningHours:
-      typeof source.expiryWarningHours === "number" &&
-      source.expiryWarningHours > 0
-        ? Math.round(source.expiryWarningHours)
-        : DEFAULT_NOTIFICATION_CONFIG.expiryWarningHours,
-    urgentExpiryHours:
-      typeof source.urgentExpiryHours === "number" &&
-      source.urgentExpiryHours > 0
-        ? Math.round(source.urgentExpiryHours)
-        : DEFAULT_NOTIFICATION_CONFIG.urgentExpiryHours,
+    expiryWarningHours,
+    urgentExpiryHours,
     rules: {
       creditExpiry:
         typeof rules.creditExpiry === "boolean" ? rules.creditExpiry : true,
@@ -183,11 +192,13 @@ export function normalizeNotificationConfig(
 export function normalizeConfig(
   partial: Partial<AppConfig> | null | undefined,
 ): AppConfig {
-  const p = partial ?? {};
+  const p =
+    typeof partial === "object" && partial !== null && !Array.isArray(partial)
+      ? partial
+      : {};
   const sourceMode = migrateSourceMode(p);
   return {
-    configVersion:
-      typeof p.configVersion === "number" ? p.configVersion : CONFIG_VERSION,
+    configVersion: CONFIG_VERSION,
     sourceMode,
     selectedSourceId:
       typeof p.selectedSourceId === "string" || p.selectedSourceId === null
@@ -246,4 +257,13 @@ export function normalizeConfig(
         ? p.performanceMode
         : (DEFAULT_CONFIG.performanceMode ?? false),
   };
+}
+
+export function parseConfigText(raw: string | null): AppConfig | null {
+  if (!raw) return null;
+  try {
+    return normalizeConfig(JSON.parse(raw) as Partial<AppConfig>);
+  } catch {
+    return null;
+  }
 }

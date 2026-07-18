@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { buildAppState } from "./parser";
 import { sanitizeErrorMessage } from "./privacy";
 import { isRefreshLocked } from "./refreshLock";
+import { parseConfigText } from "./config";
 import { refreshBySourceMode } from "./sources";
 import type {
   AppConfig,
@@ -122,7 +123,7 @@ export async function loadConfig(): Promise<AppConfig | null> {
   try {
     const raw = await invoke<string | null>("read_app_config");
     if (!raw) return null;
-    return JSON.parse(raw) as AppConfig;
+    return parseConfigText(raw);
   } catch {
     return null;
   }
@@ -184,6 +185,12 @@ export async function claimNotificationEvent(
   eventKey: string,
 ): Promise<boolean> {
   return invoke<boolean>("claim_notification_event", { eventKey });
+}
+
+export async function isNotificationEventClaimed(
+  eventKey: string,
+): Promise<boolean> {
+  return invoke<boolean>("is_notification_event_claimed", { eventKey });
 }
 
 export async function buildDiagnosticSummary(options: {

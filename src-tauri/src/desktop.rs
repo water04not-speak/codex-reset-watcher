@@ -1,7 +1,12 @@
 use serde::Deserialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Runtime, WindowEvent};
+use tauri_plugin_notification::NotificationExt;
+
+static EXITING: AtomicBool = AtomicBool::new(false);
+static TRAY_AVAILABLE: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -32,6 +37,8 @@ struct TrayLabels {
     settings: &'static str,
     quit: &'static str,
     no_data: &'static str,
+    close_hint_title: &'static str,
+    close_hint_body: &'static str,
 }
 
 fn tray_labels(language: &str) -> TrayLabels {
@@ -45,6 +52,9 @@ fn tray_labels(language: &str) -> TrayLabels {
             settings: "Settings",
             quit: "Quit",
             no_data: "No data",
+            close_hint_title: "Still running in the tray",
+            close_hint_body:
+                "Codex Reset Watcher was minimized. Use the tray icon to reopen or quit.",
         },
         "ja" => TrayLabels {
             open: "Codex Reset Watcher を開く",
@@ -55,6 +65,8 @@ fn tray_labels(language: &str) -> TrayLabels {
             settings: "設定",
             quit: "終了",
             no_data: "データなし",
+            close_hint_title: "トレイで実行中です",
+            close_hint_body: "最小化しました。再表示または終了はトレイアイコンから操作できます。",
         },
         "zh-TW" => TrayLabels {
             open: "開啟 Codex Reset Watcher",
@@ -65,6 +77,8 @@ fn tray_labels(language: &str) -> TrayLabels {
             settings: "設定",
             quit: "結束",
             no_data: "暫無資料",
+            close_hint_title: "仍在系統匣中執行",
+            close_hint_body: "Codex Reset Watcher 已最小化，可由系統匣重新開啟或結束。",
         },
         _ => TrayLabels {
             open: "打开 Codex Reset Watcher",
@@ -75,7 +89,31 @@ fn tray_labels(language: &str) -> TrayLabels {
             settings: "设置",
             quit: "退出",
             no_data: "暂无数据",
+            close_hint_title: "应用仍在托盘运行",
+            close_hint_body: "Codex Reset Watcher 已最小化，可从托盘重新打开或退出。",
         },
+    }
+}
+
+fn show_close_to_tray_hint<R: Runtime>(app: &AppHandle<R>, language: &str) {
+    let Ok(directory) = app.path().app_data_dir() else {
+        return;
+    };
+    let marker = directory.join("close-to-tray-hint-v1");
+    if marker.exists() {
+        return;
+    }
+    let labels = tray_labels(language);
+    if app
+        .notification()
+        .builder()
+        .title(labels.close_hint_title)
+        .body(labels.close_hint_body)
+        .show()
+        .is_ok()
+    {
+        let _ = std::fs::create_dir_all(&directory);
+        let _ = std::fs::write(marker, b"shown");
     }
 }
 
@@ -147,16 +185,10 @@ fn tray_menu<R: Runtime>(
     )
 }
 
-pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let config = read_host_config(app.handle());
-    if let Some(window) = app.get_webview_window("main") {
-        window.set_always_on_top(config.always_on_top)?;
-        if config.start_minimized {
-            window.hide()?;
-        }
-    }
-
-    let menu = tray_menu(app.handle(), &config.language, None, false)?;
+fn build_tray(app: &mut tauri::App, language: &str) -> bool {
+    let Ok(menu) = tray_menu(app.handle(), language, None, false) else {
+        return false;
+    };
     let mut builder = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -173,7 +205,10 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 show_main_window(app);
                 let _ = app.emit("tray-open-settings", ());
             }
-            "quit" => app.exit(0),
+            "quit" => {
+                EXITING.store(true, Ordering::SeqCst);
+                app.exit(0);
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -190,17 +225,43 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());
     }
-    builder.build(app)?;
+    builder.build(app).is_ok()
+}
+
+pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let config = read_host_config(app.handle());
+    if let Some(window) = app.get_webview_window("main") {
+        window.set_always_on_top(config.always_on_top)?;
+    }
+
+    let tray_available = build_tray(app, &config.language);
+    TRAY_AVAILABLE.store(tray_available, Ordering::SeqCst);
+    if let Some(window) = app.get_webview_window("main") {
+        if config.start_minimized && tray_available {
+            window.hide()?;
+        } else {
+            // If the tray is unavailable, never strand a portable user with a
+            // hidden window that cannot be reopened.
+            window.show()?;
+        }
+    }
     Ok(())
 }
 
 pub fn handle_window_event(window: &tauri::Window, event: &WindowEvent) {
     if let WindowEvent::CloseRequested { api, .. } = event {
-        let config = read_host_config(window.app_handle());
-        if config.close_behavior != "quit" {
-            api.prevent_close();
-            let _ = window.hide();
+        if EXITING.load(Ordering::SeqCst) {
+            return;
         }
+        let config = read_host_config(window.app_handle());
+        if config.close_behavior == "quit" || !TRAY_AVAILABLE.load(Ordering::SeqCst) {
+            EXITING.store(true, Ordering::SeqCst);
+            window.app_handle().exit(0);
+            return;
+        }
+        api.prevent_close();
+        show_close_to_tray_hint(window.app_handle(), &config.language);
+        let _ = window.hide();
     }
 }
 
@@ -240,6 +301,14 @@ mod tests {
         assert!(!config.start_minimized);
         assert_eq!(config.close_behavior, "minimizeToTray");
         assert_eq!(config.language, "zh-CN");
+
+        let invalid: HostConfig = serde_json::from_str(
+            r#"{"alwaysOnTop":"yes","startMinimized":1,"closeBehavior":false}"#,
+        )
+        .unwrap_or_default();
+        assert!(!invalid.always_on_top);
+        assert!(!invalid.start_minimized);
+        assert_eq!(invalid.close_behavior, "minimizeToTray");
     }
 
     #[test]
@@ -248,6 +317,7 @@ mod tests {
             let labels = tray_labels(language);
             assert!(!labels.open.is_empty());
             assert!(!labels.no_data.is_empty());
+            assert!(!labels.close_hint_body.is_empty());
         }
     }
 }

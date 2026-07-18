@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Window resets and quota increases are no longer interpreted as negative consumption.
 - Insufficient or short-span history no longer produces fabricated forecasts.
 - History view no longer overlaps the no-login empty state, and the version footer no longer covers cards.
+- Fallback credit identifiers no longer depend on array order, balance, status, or refresh-time fields.
+- Future, duplicate, and backward clock readings are excluded from rate calculations instead of creating extreme forecasts.
+- Concurrent history operations are serialized; malformed and unsupported-schema lines retain recovery backups.
+- Failed notification delivery remains retryable, and React StrictMode no longer leaks duplicate tray listeners.
 
 ### Security
 

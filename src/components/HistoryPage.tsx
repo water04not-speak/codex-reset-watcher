@@ -4,6 +4,7 @@ import type {
   QuotaHistorySnapshot,
   UsageTrendAnalysis,
 } from "../core/types";
+import { realSnapshotsOnly } from "../core/history";
 import { formatDateTime, t } from "../i18n";
 
 interface HistoryPageProps {
@@ -97,7 +98,11 @@ export const HistoryPage = memo(function HistoryPage({
   onExport,
   onClear,
 }: HistoryPageProps) {
-  const latest = snapshots[snapshots.length - 1] ?? null;
+  const trendSnapshots = useMemo(
+    () => realSnapshotsOnly(snapshots),
+    [snapshots],
+  );
+  const hasDemoSnapshots = snapshots.some((snapshot) => snapshot.isDemo);
   return (
     <main className="app-main history-page">
       <header className="history-header">
@@ -159,13 +164,13 @@ export const HistoryPage = memo(function HistoryPage({
 
       <section className="history-charts">
         <TrendChart
-          snapshots={snapshots}
+          snapshots={trendSnapshots}
           field="fiveHourWindow"
           label={t("history.fiveHourTrend", lang)}
           lang={lang}
         />
         <TrendChart
-          snapshots={snapshots}
+          snapshots={trendSnapshots}
           field="sevenDayWindow"
           label={t("history.sevenDayTrend", lang)}
           lang={lang}
@@ -233,8 +238,10 @@ export const HistoryPage = memo(function HistoryPage({
                 {snapshots
                   .slice(-12)
                   .reverse()
-                  .map((snapshot) => (
-                    <tr key={`${snapshot.capturedAt}:${snapshot.sourceType}`}>
+                  .map((snapshot, index) => (
+                    <tr
+                      key={`${snapshot.capturedAt}:${snapshot.sourceType}:${index}`}
+                    >
                       <td>{formatDateTime(snapshot.capturedAt, lang)}</td>
                       <td>{snapshot.sourceType}</td>
                       <td>{t(`tray.status.${snapshot.sourceHealth}`, lang)}</td>
@@ -256,7 +263,7 @@ export const HistoryPage = memo(function HistoryPage({
             </table>
           </div>
         )}
-        {latest?.isDemo && <p>{t("history.demoExcluded", lang)}</p>}
+        {hasDemoSnapshots && <p>{t("history.demoExcluded", lang)}</p>}
       </section>
     </main>
   );

@@ -64,11 +64,14 @@ export async function registerDesktopEventHandlers(handlers: {
 }): Promise<() => void> {
   let unlisten: Array<() => void> = [];
   try {
-    unlisten = await Promise.all([
+    const listeners = await Promise.allSettled([
       listen("tray-refresh", handlers.onRefresh),
       listen("tray-open-settings", handlers.onOpenSettings),
       listen("tray-toggle-notifications", handlers.onToggleNotifications),
     ]);
+    unlisten = listeners.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
+    );
   } catch {
     // Browser-only QA has no Tauri event bridge.
   }

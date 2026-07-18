@@ -8,6 +8,7 @@ import type {
 } from "./types";
 
 const MIN_TREND_SPAN_MS = 5 * 60 * 1000;
+const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
@@ -16,11 +17,21 @@ interface TimedSnapshot {
   at: number;
 }
 
-function sortedValid(snapshots: QuotaHistorySnapshot[]): TimedSnapshot[] {
-  return realSnapshotsOnly(snapshots)
-    .map((snapshot) => ({ snapshot, at: Date.parse(snapshot.capturedAt) }))
-    .filter((item) => Number.isFinite(item.at))
-    .sort((a, b) => a.at - b.at);
+function validChronological(
+  snapshots: QuotaHistorySnapshot[],
+  now: number,
+): TimedSnapshot[] {
+  const items: TimedSnapshot[] = [];
+  for (const snapshot of realSnapshotsOnly(snapshots)) {
+    const at = Date.parse(snapshot.capturedAt);
+    if (!Number.isFinite(at) || at > now + MAX_FUTURE_SKEW_MS) continue;
+    const previous = items[items.length - 1];
+    // Preserve append order. Duplicate or backwards clock readings are unsafe
+    // for rate calculations and are ignored instead of being re-sorted.
+    if (previous && at <= previous.at) continue;
+    items.push({ snapshot, at });
+  }
+  return items;
 }
 
 function validRemaining(window: QuotaHistoryWindow | null): number | null {
@@ -123,8 +134,10 @@ export function analyzeUsageHistory(
   snapshots: QuotaHistorySnapshot[],
   now: Date = new Date(),
 ): UsageTrendAnalysis {
-  const items = sortedValid(snapshots);
   const nowMs = now.getTime();
+  const items = Number.isFinite(nowMs)
+    ? validChronological(snapshots, nowMs)
+    : [];
   const first = items[0];
   const latest = items[items.length - 1];
   const spanMs = first && latest ? Math.max(0, latest.at - first.at) : 0;

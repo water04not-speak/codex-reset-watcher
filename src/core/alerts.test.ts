@@ -107,6 +107,24 @@ describe("notification rules", () => {
     ).toEqual([]);
   });
 
+  it("does not treat unavailable data as trusted quota", () => {
+    const events = evaluateAlertEvents({
+      current: { ...current, sourceHealth: "unavailable" },
+      trend,
+      health: {
+        ...health,
+        isReal: false,
+        isFallback: false,
+        adapterHealth: "unavailable",
+      },
+      config: DEFAULT_NOTIFICATION_CONFIG,
+    });
+
+    expect(events.some((event) => event.kind === "creditExpiry")).toBe(false);
+    expect(events.some((event) => event.kind === "depletionRisk")).toBe(false);
+    expect(events.some((event) => event.kind === "refreshFailures")).toBe(true);
+  });
+
   it("handles overnight do-not-disturb and urgent breakthrough", () => {
     const config = {
       ...DEFAULT_NOTIFICATION_CONFIG,
@@ -119,6 +137,18 @@ describe("notification rules", () => {
     };
     const now = new Date("2026-07-18T23:00:00");
     expect(isWithinDoNotDisturb(config.doNotDisturb, now)).toBe(true);
+    expect(
+      isWithinDoNotDisturb(
+        config.doNotDisturb,
+        new Date("2026-07-19T07:59:00"),
+      ),
+    ).toBe(true);
+    expect(
+      isWithinDoNotDisturb(
+        config.doNotDisturb,
+        new Date("2026-07-19T08:00:00"),
+      ),
+    ).toBe(false);
     expect(
       shouldDelayAlert(
         {
@@ -145,5 +175,33 @@ describe("notification rules", () => {
         now,
       ),
     ).toBe(false);
+  });
+
+  it("uses distinct stable keys for 72-hour and 24-hour credit alerts", () => {
+    const warning = evaluateAlertEvents({
+      current,
+      trend: {
+        ...trend,
+        creditRisks: [
+          {
+            ...trend.creditRisks[0],
+            hoursRemaining: 48,
+            level: "warning",
+          },
+        ],
+      },
+      health: { ...health, consecutiveFailures: 0, isFallback: false },
+      config: DEFAULT_NOTIFICATION_CONFIG,
+    }).find((event) => event.kind === "creditExpiry");
+    const urgent = evaluateAlertEvents({
+      current,
+      trend,
+      health: { ...health, consecutiveFailures: 0, isFallback: false },
+      config: DEFAULT_NOTIFICATION_CONFIG,
+    }).find((event) => event.kind === "creditExpiry");
+
+    expect(warning?.key).toBe("credit-expiry:credit-1:72");
+    expect(urgent?.key).toBe("credit-expiry:credit-1:24");
+    expect(warning?.key).not.toBe(urgent?.key);
   });
 });

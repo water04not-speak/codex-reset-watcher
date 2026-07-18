@@ -6,6 +6,7 @@ import {
   appendQuotaSnapshot,
   buildDiagnosticSummary,
   claimNotificationEvent,
+  isNotificationEventClaimed,
   clearQuotaHistory,
   loadConfig,
   readQuotaHistory,
@@ -82,6 +83,26 @@ function healthErrorCopy(
       return t("source.detectFailed", lang);
     default:
       return fallback ? sanitizeErrorMessage(fallback) : null;
+  }
+}
+
+async function dispatchAlertEvents(
+  events: ReturnType<typeof evaluateAlertEvents>,
+  config: NonNullable<AppConfig["notifications"]>,
+  lang: AppConfig["language"],
+): Promise<void> {
+  for (const event of events) {
+    if (shouldDelayAlert(event, config, new Date())) continue;
+    try {
+      if (
+        !(await isNotificationEventClaimed(event.key)) &&
+        (await sendAlertNotification(event, lang))
+      ) {
+        await claimNotificationEvent(event.key);
+      }
+    } catch {
+      // Notification failures are intentionally non-fatal and remain retryable.
+    }
   }
 }
 
@@ -260,16 +281,7 @@ function App() {
           previousHealth,
           config: alertConfig,
         });
-        for (const event of events) {
-          if (shouldDelayAlert(event, alertConfig, new Date())) continue;
-          try {
-            if (await claimNotificationEvent(event.key)) {
-              await sendAlertNotification(event, currentLang);
-            }
-          } catch {
-            // Notification failures are intentionally non-fatal.
-          }
-        }
+        await dispatchAlertEvents(events, alertConfig, currentLang);
       }
 
       await configureTray({
@@ -303,6 +315,24 @@ function App() {
       };
       healthRef.current = nextHealth;
       setHealth(nextHealth);
+      const alertConfig =
+        currentConfig.notifications ?? DEFAULT_CONFIG.notifications;
+      if (alertConfig) {
+        const failureSnapshot = createQuotaSnapshot({
+          state: previous,
+          sourceType: nextHealth.sourceType || "none",
+          sourceHealth: "unavailable",
+          fetchDurationMs: nextHealth.lastDurationMs ?? 0,
+        });
+        const failureEvents = evaluateAlertEvents({
+          current: failureSnapshot,
+          trend: analyzeUsageHistory(snapshotsRef.current),
+          health: nextHealth,
+          previousHealth,
+          config: alertConfig,
+        }).filter((event) => event.kind === "refreshFailures");
+        await dispatchAlertEvents(failureEvents, alertConfig, currentLang);
+      }
     } finally {
       isRefreshingRef.current = false;
       setRefreshLock(false);
@@ -312,6 +342,7 @@ function App() {
 
   useEffect(() => {
     if (!configLoaded) return;
+    let cancelled = false;
     let cleanup: (() => void) | undefined;
     void registerDesktopEventHandlers({
       onRefresh: () => void refresh(),
@@ -332,9 +363,13 @@ function App() {
         void configureTray({ config: next });
       },
     }).then((stop) => {
-      cleanup = stop;
+      if (cancelled) stop();
+      else cleanup = stop;
     });
-    return () => cleanup?.();
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, [configLoaded, refresh]);
 
   useEffect(() => {
@@ -464,8 +499,15 @@ function App() {
 
   const applyConfigAndRefresh = async (nextConfig: AppConfig) => {
     const normalized = normalizeConfig(nextConfig);
-    await saveConfig(normalized);
-    await applyDesktopSettings(normalized);
+    const previousConfig = configRef.current;
+    try {
+      await applyDesktopSettings(normalized);
+      await saveConfig(normalized);
+    } catch (error) {
+      // Keep persisted and live desktop state aligned after a partial failure.
+      await applyDesktopSettings(previousConfig).catch(() => undefined);
+      throw error;
+    }
     // Keep ref in sync before refresh to avoid stale sourceMode races.
     configRef.current = normalized;
     setConfig(normalized);

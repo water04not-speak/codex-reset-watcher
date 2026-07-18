@@ -489,6 +489,7 @@ pub fn run() {
             history::clear_quota_history,
             history::export_quota_history,
             history::write_quota_history_export,
+            notifications::is_notification_event_claimed,
             notifications::claim_notification_event,
             diagnostics::build_diagnostic_summary,
             desktop::apply_window_settings,

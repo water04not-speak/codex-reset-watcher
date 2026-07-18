@@ -89,6 +89,8 @@ export type ResetCreditStatus = "normal" | "expiring" | "expired" | "unknown";
 export interface ResetCredit {
   /** 在 credits 数组中的下标（稳定引用用）。 */
   index: number;
+  /** 上游稳定标识；没有时为 null。 */
+  sourceId?: string | null;
   /** 源字段 reset_type，例如 "codex_rate_limits"。 */
   resetType: string;
   /** 源字段 status（available/redeemed/... 可能变化），原样保留。 */
@@ -97,6 +99,10 @@ export interface ResetCredit {
   grantedAt: string | null;
   /** ISO UTC 过期时间；一切剩余时间计算以此为准；解析不到为 null。 */
   expiresAt: string | null;
+  /** 上游返回的原始面额；解析不到为 null。 */
+  amount?: number | null;
+  /** 上游返回的当前余额；仅保存，不参与稳定标识。 */
+  remaining?: number | null;
   /** 距离过期的剩余秒数（相对当前时间，自行计算）；无 expiresAt 为 null。 */
   remainingSeconds: number | null;
   /** 人类可读的剩余时间文案（由 i18n 生成）。 */

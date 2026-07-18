@@ -84,8 +84,10 @@ export function evaluateAlertEvents(options: {
   } = options;
   if (!config.enabled || config.paused || current.isDemo) return [];
   const events: AlertEvent[] = [];
+  const hasTrustedQuota =
+    health.isReal && !health.isDemo && health.adapterHealth !== "unavailable";
 
-  if (config.rules.creditExpiry) {
+  if (config.rules.creditExpiry && hasTrustedQuota) {
     for (const risk of trend.creditRisks) {
       const threshold =
         risk.hoursRemaining <= config.urgentExpiryHours
@@ -106,7 +108,7 @@ export function evaluateAlertEvents(options: {
     }
   }
 
-  if (config.rules.windowRecovered) {
+  if (config.rules.windowRecovered && hasTrustedQuota) {
     if (recovered(previous, current, "fiveHourWindow")) {
       events.push({
         key: `window-recovered:five:${current.fiveHourWindow?.resetAt ?? current.capturedAt}`,
@@ -127,7 +129,7 @@ export function evaluateAlertEvents(options: {
     }
   }
 
-  if (config.rules.depletionRisk) {
+  if (config.rules.depletionRisk && hasTrustedQuota) {
     const windows = [
       ["five", current.fiveHourWindow, trend.fiveHour],
       ["seven", current.sevenDayWindow, trend.sevenDay],

@@ -1,6 +1,7 @@
 //! Codex Reset Watcher —— 核心数据桥（Rust 侧）。
 
 mod desktop;
+mod diagnostics;
 mod history;
 mod notifications;
 mod sanitize;
@@ -559,6 +560,7 @@ pub fn run() {
             history::export_quota_history,
             history::write_quota_history_export,
             notifications::claim_notification_event,
+            diagnostics::build_diagnostic_summary,
             desktop::apply_window_settings,
             desktop::configure_tray,
             desktop::show_main,

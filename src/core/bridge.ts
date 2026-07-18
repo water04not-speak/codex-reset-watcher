@@ -16,6 +16,7 @@ import type {
   QuotaHistorySnapshot,
   RawFetchKind,
   RawFetchResult,
+  SourceHealthSummary,
 } from "./types";
 import type { ResolvedSource, SourceDetectionResult } from "./sources/types";
 
@@ -170,6 +171,35 @@ export async function exportQuotaHistory(
   format: "csv" | "json",
 ): Promise<string> {
   return invoke<string>("export_quota_history", { format });
+}
+
+export async function writeQuotaHistoryExport(
+  path: string,
+  format: "csv" | "json",
+): Promise<void> {
+  await invoke("write_quota_history_export", { path, format });
+}
+
+export async function claimNotificationEvent(
+  eventKey: string,
+): Promise<boolean> {
+  return invoke<boolean>("claim_notification_event", { eventKey });
+}
+
+export async function buildDiagnosticSummary(options: {
+  appVersion: string;
+  health: SourceHealthSummary;
+  at?: string;
+}): Promise<string> {
+  return invoke<string>("build_diagnostic_summary", {
+    input: {
+      appVersion: options.appVersion,
+      sourceType: options.health.sourceType,
+      statusClass: options.health.adapterHealth,
+      at: options.at ?? new Date().toISOString(),
+      durationMs: options.health.lastDurationMs,
+    },
+  });
 }
 
 /** 触发 Rust 侧重新探测数据源。 */

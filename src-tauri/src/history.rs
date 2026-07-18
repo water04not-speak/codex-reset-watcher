@@ -305,6 +305,31 @@ pub fn export_quota_history(app: AppHandle, format: String) -> Result<String, St
     }
 }
 
+#[tauri::command]
+pub fn write_quota_history_export(
+    app: AppHandle,
+    format: String,
+    path: String,
+) -> Result<(), String> {
+    let expected_extension = match format.as_str() {
+        "csv" => "csv",
+        "json" => "json",
+        _ => return Err("unsupported export format".to_string()),
+    };
+    let destination = PathBuf::from(path);
+    if destination
+        .extension()
+        .and_then(|value| value.to_str())
+        .map_or(true, |value| {
+            !value.eq_ignore_ascii_case(expected_extension)
+        })
+    {
+        return Err("export extension does not match format".to_string());
+    }
+    let contents = export_quota_history(app, format)?;
+    fs::write(destination, contents).map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -34,7 +34,11 @@ export {
   adapterStdoutToRawInputs,
 } from "./normalize";
 
-export { createMockCandidate, refreshMockSource, MOCK_SCRIPT_RELATIVE } from "./mockSource";
+export {
+  createMockCandidate,
+  refreshMockSource,
+  MOCK_SCRIPT_RELATIVE,
+} from "./mockSource";
 
 export {
   validateScriptConfig,

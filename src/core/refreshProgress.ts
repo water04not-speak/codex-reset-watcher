@@ -2,11 +2,7 @@ import type { LanguageCode } from "./types";
 import { t } from "../i18n";
 
 export type RefreshProgressPhase =
-  | "detecting"
-  | "connecting"
-  | "calling"
-  | "parsing"
-  | "updating";
+  "detecting" | "connecting" | "calling" | "parsing" | "updating";
 
 export const SLOW_REFRESH_HINT_SECONDS = 3;
 

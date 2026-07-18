@@ -48,7 +48,9 @@ describe("parser", () => {
 
   it("handles invalid JSON", () => {
     const state = buildAppState({ all: "not-json" }, { lang: "en" });
-    expect(state.codex.errors.some((e: string) => e.includes("all:"))).toBe(true);
+    expect(state.codex.errors.some((e: string) => e.includes("all:"))).toBe(
+      true,
+    );
   });
 });
 

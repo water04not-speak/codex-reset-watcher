@@ -40,9 +40,7 @@ export const RefreshProgress = memo(function RefreshProgress({
       <div className="refresh-progress-copy">
         <div>{getRefreshProgressText(phase, elapsedSeconds, lang)}</div>
         {slow && (
-          <p className="refresh-progress-hint">
-            {t("refresh.slowHint", lang)}
-          </p>
+          <p className="refresh-progress-hint">{t("refresh.slowHint", lang)}</p>
         )}
       </div>
     </div>

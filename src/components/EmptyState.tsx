@@ -2,11 +2,7 @@ import type { LanguageCode } from "../core/types";
 import { t } from "../i18n";
 
 export type EmptyStateVariant =
-  | "setup"
-  | "detectFailed"
-  | "needsLogin"
-  | "authExpired"
-  | "networkError";
+  "setup" | "detectFailed" | "needsLogin" | "authExpired" | "networkError";
 
 interface EmptyStateProps {
   lang: LanguageCode;
@@ -157,7 +153,11 @@ export function EmptyState({
         ))}
       </ol>
       <p className="empty-state-mock">{t("empty.mockHint", lang)}</p>
-      <button className="btn btn-primary" type="button" onClick={onOpenSettings}>
+      <button
+        className="btn btn-primary"
+        type="button"
+        onClick={onOpenSettings}
+      >
         {t("empty.openSettings", lang)}
       </button>
     </div>

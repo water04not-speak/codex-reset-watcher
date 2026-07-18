@@ -17,7 +17,9 @@ function hasCredits(data) {
 function hasRateLimits(data) {
   const rl = data?.rate_limits ?? data?.rate_limit;
   if (!rl || typeof rl !== "object") return false;
-  return Boolean(rl.primary || rl.primary_window || rl.secondary || rl.secondary_window);
+  return Boolean(
+    rl.primary || rl.primary_window || rl.secondary || rl.secondary_window,
+  );
 }
 
 function hasUsage(data) {
@@ -56,7 +58,9 @@ for (const command of commands) {
 
   if (command === "all") {
     if (!hasCredits(data) || !hasRateLimits(data) || !hasUsage(data)) {
-      console.error(`[FAIL] ${command}: missing credits, rate limits, or usage fields`);
+      console.error(
+        `[FAIL] ${command}: missing credits, rate limits, or usage fields`,
+      );
       failed = true;
       continue;
     }

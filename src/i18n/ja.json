@@ -26,6 +26,8 @@
   "status.expiring": "まもなく期限切れ",
   "status.expired": "期限切れ",
   "status.unknown": "不明",
+  "status.warning": "要確認",
+  "status.error": "利用不可",
   "window.ample": "余裕あり",
   "window.watch": "注意",
   "window.tight": "逼迫",

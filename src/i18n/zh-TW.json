@@ -26,6 +26,8 @@
   "status.expiring": "即將到期",
   "status.expired": "已到期",
   "status.unknown": "未知",
+  "status.warning": "需要注意",
+  "status.error": "無法使用",
   "window.ample": "充足",
   "window.watch": "留意",
   "window.tight": "吃緊",

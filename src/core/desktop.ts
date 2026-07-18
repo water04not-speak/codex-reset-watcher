@@ -62,11 +62,16 @@ export async function registerDesktopEventHandlers(handlers: {
   onOpenHistory: () => void;
   onToggleNotifications: () => void;
 }): Promise<() => void> {
-  const unlisten = await Promise.all([
-    listen("tray-refresh", handlers.onRefresh),
-    listen("tray-open-settings", handlers.onOpenSettings),
-    listen("tray-toggle-notifications", handlers.onToggleNotifications),
-  ]);
+  let unlisten: Array<() => void> = [];
+  try {
+    unlisten = await Promise.all([
+      listen("tray-refresh", handlers.onRefresh),
+      listen("tray-open-settings", handlers.onOpenSettings),
+      listen("tray-toggle-notifications", handlers.onToggleNotifications),
+    ]);
+  } catch {
+    // Browser-only QA has no Tauri event bridge.
+  }
   let notificationListener: { unregister: () => Promise<void> } | null = null;
   try {
     notificationListener = await onAction((notification) => {

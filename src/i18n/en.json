@@ -26,6 +26,8 @@
   "status.expiring": "Expiring soon",
   "status.expired": "Expired",
   "status.unknown": "Unknown",
+  "status.warning": "Attention needed",
+  "status.error": "Unavailable",
   "window.ample": "Ample",
   "window.watch": "Watch",
   "window.tight": "Tight",

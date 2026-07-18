@@ -66,6 +66,25 @@ const EMPTY_HEALTH: SourceHealthSummary = {
   isDemo: false,
 };
 
+function healthErrorCopy(
+  status: SourceConnectionStatus,
+  lang: AppConfig["language"],
+  fallback: string | null,
+): string | null {
+  switch (status) {
+    case "needsLogin":
+      return t("source.needsLogin", lang);
+    case "authExpired":
+      return t("source.authExpired", lang);
+    case "networkError":
+      return t("source.networkError", lang);
+    case "detectFailed":
+      return t("source.detectFailed", lang);
+    default:
+      return fallback ? sanitizeErrorMessage(fallback) : null;
+  }
+}
+
 function App() {
   const appVersion = useAppVersion();
   const [state, setState] = useState<AppState>(createInitialAppState());
@@ -184,10 +203,11 @@ function App() {
         consecutiveFailures: hasData
           ? 0
           : previousHealth.consecutiveFailures + 1,
-        lastErrorSummary:
-          newState.codex.errors.length > 0
-            ? sanitizeErrorMessage(newState.codex.errors[0])
-            : null,
+        lastErrorSummary: healthErrorCopy(
+          nextStatus,
+          currentLang,
+          newState.codex.errors[0] ?? null,
+        ),
         adapterHealth: isDemo
           ? "mock"
           : hasData
@@ -277,7 +297,7 @@ function App() {
         ...healthRef.current,
         lastDurationMs: Date.now() - startedAt,
         consecutiveFailures: healthRef.current.consecutiveFailures + 1,
-        lastErrorSummary: sanitizeErrorMessage(String(err)),
+        lastErrorSummary: t("source.detectFailed", currentLang),
         adapterHealth: "unavailable",
         isFallback: false,
       };
@@ -552,7 +572,7 @@ function App() {
         <RefreshProgress lang={lang} compact={hasData} />
       )}
 
-      {showEmptyState && (
+      {page === "overview" && showEmptyState && (
         <EmptyState
           lang={lang}
           variant={emptyVariant}

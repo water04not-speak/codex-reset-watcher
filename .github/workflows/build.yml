@@ -94,15 +94,19 @@ jobs:
         working-directory: src-tauri
         run: cargo check
 
+      - name: Cargo format check
+        working-directory: src-tauri
+        run: cargo fmt --check
+
       - name: Cargo clippy
         working-directory: src-tauri
-        run: cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Cargo test
         working-directory: src-tauri
         run: cargo test
 
-      # Windows installers are unsigned in v0.2.x.
+      # Windows installers are unsigned in v0.3.x.
       # Build once; portable and NSIS must come from this same workspace output.
       - name: Build Tauri
         run: npm run tauri build

@@ -1,8 +1,10 @@
 //! Codex Reset Watcher —— 核心数据桥（Rust 侧）。
 
+mod history;
 mod sanitize;
 mod session_log;
 mod source_detect;
+mod storage;
 mod wham_adapter;
 
 use std::io::Read;
@@ -66,10 +68,9 @@ fn read_app_config(app: AppHandle) -> Result<Option<String>, String> {
 #[tauri::command]
 fn write_app_config(app: AppHandle, contents: String) -> Result<(), String> {
     let path = config_path(&app)?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(&path, contents).map_err(|e| e.to_string())
+    // Validate JSON before replacing the user's last known-good config.
+    serde_json::from_str::<serde_json::Value>(&contents).map_err(|e| e.to_string())?;
+    storage::atomic_write(&path, contents.as_bytes())
 }
 
 fn config_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
@@ -543,6 +544,10 @@ pub fn run() {
             test_codex_source,
             read_app_config,
             write_app_config,
+            history::append_quota_snapshot,
+            history::read_quota_history,
+            history::clear_quota_history,
+            history::export_quota_history,
             app_log
         ])
         .run(tauri::generate_context!())

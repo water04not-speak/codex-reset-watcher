@@ -12,6 +12,8 @@ import type {
   AppConfig,
   AppState,
   LanguageCode,
+  HistoryRetentionDays,
+  QuotaHistorySnapshot,
   RawFetchKind,
   RawFetchResult,
 } from "./types";
@@ -138,6 +140,36 @@ export async function saveConfig(config: AppConfig): Promise<void> {
   await invoke("write_app_config", {
     contents: JSON.stringify(normalized, null, 2),
   });
+}
+
+export interface AppendSnapshotResult {
+  stored: boolean;
+  deduplicated: boolean;
+  total: number;
+}
+
+export async function appendQuotaSnapshot(
+  snapshot: QuotaHistorySnapshot,
+  retentionDays: HistoryRetentionDays,
+): Promise<AppendSnapshotResult> {
+  return invoke<AppendSnapshotResult>("append_quota_snapshot", {
+    snapshot,
+    retentionDays,
+  });
+}
+
+export async function readQuotaHistory(): Promise<QuotaHistorySnapshot[]> {
+  return invoke<QuotaHistorySnapshot[]>("read_quota_history");
+}
+
+export async function clearQuotaHistory(): Promise<void> {
+  await invoke("clear_quota_history");
+}
+
+export async function exportQuotaHistory(
+  format: "csv" | "json",
+): Promise<string> {
+  return invoke<string>("export_quota_history", { format });
 }
 
 /** 触发 Rust 侧重新探测数据源。 */

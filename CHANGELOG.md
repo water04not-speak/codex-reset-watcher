@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-18
+
+### Added
+
+- Local, typed JSONL quota history with retention choices, duplicate suppression, malformed-file recovery, clear, and sanitized CSV/JSON export.
+- Deterministic 24-hour / 7-day usage trends, reset/top-up recognition, last-use detection, credit expiry risk, and explainable depletion estimates.
+- Tauri 2 system tray with open, refresh, status, pause/resume notifications, Settings, and quit actions.
+- Windows notifications for expiring credits, recovered windows, depletion risk, repeated refresh failure, and source fallback, with stable deduplication and do-not-disturb hours.
+- Data-source health center and strictly sanitized copyable diagnostics.
+
+### Changed
+
+- Repositioned the product as a local-first Codex usage monitoring and alert companion instead of only a quota viewer.
+- Launch at startup, always on top, start minimized, and close-to-tray/direct-quit settings now apply in the Tauri host.
+- Recommendations now come from explicit rules and show why they were triggered.
+- All new desktop, settings, history, health, and notification text is available in zh-CN, en, ja, and zh-TW.
+
+### Fixed
+
+- Mock/demo snapshots no longer contaminate real history or forecasts.
+- Window resets and quota increases are no longer interpreted as negative consumption.
+- Insufficient or short-span history no longer produces fabricated forecasts.
+- History view no longer overlaps the no-login empty state, and the version footer no longer covers cards.
+
+### Security
+
+- History accepts only credential-free typed fields and rejects unknown fields.
+- Credentials, raw API responses, headers, usernames, paths, emails, tokens, and cookies are excluded from history, exports, diagnostics, and notification text.
+- Notification persistence stores stable event keys and timestamps only; no telemetry or upload was added.
+
 ## [0.2.3] - 2026-07-04
 
 ### Changed
@@ -123,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No system tray integration yet.
 
 [0.2.3]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.3
+[0.3.0]: https://github.com/water04not-speak/codex-reset-watcher/compare/v0.2.3...v0.3.0
 [0.2.2]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.2
 [0.2.1]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.1
 [0.2.0]: https://github.com/water04not-speak/codex-reset-watcher/releases/tag/v0.2.0

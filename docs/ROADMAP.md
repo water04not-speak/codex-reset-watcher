@@ -1,14 +1,14 @@
 # Roadmap
 
-Current version: **v0.2.3**. This roadmap describes intent only and is not a commitment.
+Current version: **v0.3.0**. This roadmap describes intent only and is not a commitment.
 
 ## Positioning
 
-- Local-only visualization of Codex reset credits and rate-limit windows
+- Local-first desktop companion for Codex usage history, reset windows, expiring credits, trends, and actionable alerts
 - Privacy-first: no project-operated cloud sync or telemetry
 - Not a Codex client, not a way to bypass limits
 
-## Done in v0.2.x
+## Done through v0.3.0
 
 - Automatic source detection with built-in adapter as the primary path
 - Session-log fallback and optional Codex-Usage / mock advanced paths
@@ -17,21 +17,24 @@ Current version: **v0.2.3**. This roadmap describes intent only and is not a com
 - Slow-refresh progress messaging
 - Sanitized local logs and credential boundary (tokens stay out of UI, config, and logs)
 - Recommended Windows artifacts: NSIS installer and portable exe
+- Safe local JSONL history with retention, corruption recovery, deduplication, clear, and CSV/JSON export
+- Deterministic 24-hour / 7-day trends, reset/top-up recognition, and explainable depletion estimates
+- Tauri 2 system tray, Windows notifications, stable event deduplication, and do-not-disturb hours
+- Launch at startup, always on top, start minimized, and close-to-tray behavior wired to the host
+- Data-source health center and strictly sanitized diagnostic summary
 
 ## Near term
 
 - Signed Windows installers
 - Clearer MSI per-user vs enterprise packaging policy
-- System tray
-- Apply launch-at-startup, always-on-top, and start-minimized in the host
 - Broader desktop UI automation
 - Light-theme visual polish
 
 ## Later (optional)
 
-- More resilient adapters when upstream shapes change
-- Optional local history / export
-- Adapter health checks in Settings
+- Optional local backup and restore workflows
+- Additional adapter resilience when upstream shapes change
+- Optional chart accessibility and export refinements
 
 ## Out of scope
 

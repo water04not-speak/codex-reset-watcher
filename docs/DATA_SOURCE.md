@@ -24,6 +24,12 @@ Legacy configs: if a script path is set and `sourceMode` is absent, the app trea
 
 Credentials and login-file contents **never** reach the React UI or the app config file.
 
+## Source health and history
+
+Settings shows the current source, whether it is real data, last successful refresh, duration, consecutive failures, adapter health, fallback state, and demo warning. The copied diagnostic summary contains only app/OS basics, source type, status class, time, and duration; it excludes usernames, paths, email, auth content, headers, and raw responses.
+
+Successful real-data refreshes produce a normalized local history snapshot. Session-log fallback is marked degraded/partial. Mock data is marked demo and excluded from real trends by default. Missing upstream fields stay `null`; the app never invents quota values.
+
 ## Built-in adapter
 
 - Looks for a local Codex login on this machine
@@ -63,5 +69,6 @@ In **Settings → Data source → Advanced**, choose demo/mock. Auto mode does n
 The app does not store credentials in config. The built-in adapter reads local Codex login material only inside the host process. Share logs only after confirming they are sanitized.
 
 App settings and logs live under this application's Windows app data directory (`com.codex-reset-watcher.app`).
+Quota history and notification deduplication state live in the same application-specific data area and are never uploaded.
 
 See [PRIVACY.md](../PRIVACY.md) and [SECURITY.md](../SECURITY.md).

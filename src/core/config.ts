@@ -121,7 +121,9 @@ function normalizeTime(value: unknown, fallback: string): string {
     : fallback;
 }
 
-export function normalizeNotificationConfig(value: unknown): NotificationConfig {
+export function normalizeNotificationConfig(
+  value: unknown,
+): NotificationConfig {
   const source =
     typeof value === "object" && value !== null
       ? (value as Partial<NotificationConfig>)
@@ -162,9 +164,7 @@ export function normalizeNotificationConfig(value: unknown): NotificationConfig 
           ? rules.refreshFailures
           : true,
       sourceFallback:
-        typeof rules.sourceFallback === "boolean"
-          ? rules.sourceFallback
-          : true,
+        typeof rules.sourceFallback === "boolean" ? rules.sourceFallback : true,
     },
     doNotDisturb: {
       enabled: typeof dnd.enabled === "boolean" ? dnd.enabled : false,
@@ -192,14 +192,14 @@ export function normalizeConfig(
     selectedSourceId:
       typeof p.selectedSourceId === "string" || p.selectedSourceId === null
         ? p.selectedSourceId
-        : DEFAULT_CONFIG.selectedSourceId ?? null,
+        : (DEFAULT_CONFIG.selectedSourceId ?? null),
     detectedSourceCache: Array.isArray(p.detectedSourceCache)
       ? p.detectedSourceCache
-      : DEFAULT_CONFIG.detectedSourceCache ?? [],
+      : (DEFAULT_CONFIG.detectedSourceCache ?? []),
     lastDetectedAt:
       typeof p.lastDetectedAt === "string" || p.lastDetectedAt === null
         ? p.lastDetectedAt
-        : DEFAULT_CONFIG.lastDetectedAt ?? null,
+        : (DEFAULT_CONFIG.lastDetectedAt ?? null),
     codexUsagePath:
       typeof p.codexUsagePath === "string"
         ? p.codexUsagePath
@@ -244,6 +244,6 @@ export function normalizeConfig(
     performanceMode:
       typeof p.performanceMode === "boolean"
         ? p.performanceMode
-        : DEFAULT_CONFIG.performanceMode ?? false,
+        : (DEFAULT_CONFIG.performanceMode ?? false),
   };
 }

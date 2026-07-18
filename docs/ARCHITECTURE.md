@@ -17,11 +17,11 @@ Codex Reset Watcher is a Tauri 2 desktop app with three layers:
 
 ## Layers
 
-| Layer | Responsibility |
-|-------|----------------|
-| **Rust host** | Source detection, adapters, safe JSONL history, notification event state, atomic config I/O, tray/window lifecycle, export, diagnostics, redaction |
-| **TypeScript core** | Source routing, normalization, deterministic trends, reset/top-up recognition, alert rules, config migration |
-| **React UI** | Overview, history/SVG trends, rule-based recommendations, source health, settings, refresh scheduling |
+| Layer               | Responsibility                                                                                                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Rust host**       | Source detection, adapters, safe JSONL history, notification event state, atomic config I/O, tray/window lifecycle, export, diagnostics, redaction |
+| **TypeScript core** | Source routing, normalization, deterministic trends, reset/top-up recognition, alert rules, config migration                                       |
+| **React UI**        | Overview, history/SVG trends, rule-based recommendations, source health, settings, refresh scheduling                                              |
 
 ## Auto-mode data flow
 

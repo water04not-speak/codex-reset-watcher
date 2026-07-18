@@ -185,10 +185,7 @@ export interface AppState {
 }
 
 export type SnapshotSourceHealth =
-  | "healthy"
-  | "degraded"
-  | "unavailable"
-  | "mock";
+  "healthy" | "degraded" | "unavailable" | "mock";
 
 export interface QuotaHistoryWindow {
   remaining: number | null;

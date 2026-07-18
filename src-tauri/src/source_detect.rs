@@ -330,8 +330,8 @@ mod tests {
             confidence: 90,
             ..a.clone()
         };
-        let mut v = vec![a, b];
-        v.sort_by(|x, y| y.confidence.cmp(&x.confidence));
+        let mut v = [a, b];
+        v.sort_by_key(|candidate| std::cmp::Reverse(candidate.confidence));
         assert_eq!(v[0].confidence, 90);
     }
 
@@ -361,11 +361,9 @@ mod tests {
             confidence: 95,
             ..mock.clone()
         };
-        let mut candidates = vec![mock, wham];
-        candidates.sort_by(|a, b| {
-            b.confidence
-                .cmp(&a.confidence)
-                .then_with(|| kind_rank(&b.kind).cmp(&kind_rank(&a.kind)))
+        let mut candidates = [mock, wham];
+        candidates.sort_by_key(|candidate| {
+            std::cmp::Reverse((candidate.confidence, kind_rank(&candidate.kind)))
         });
         let recommended = candidates
             .iter()

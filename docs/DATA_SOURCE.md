@@ -4,23 +4,23 @@ Codex Reset Watcher supports automatic source detection as the default path, plu
 
 ## Source modes
 
-| Mode | Behavior |
-|------|----------|
-| `auto` (default) | Detect local candidates and try **real** sources by priority |
-| `manual` | Advanced: user-configured Python command and Codex-Usage script path |
-| `mock` | Advanced / troubleshooting: bundled demo script (**not real quota**) |
+| Mode             | Behavior                                                             |
+| ---------------- | -------------------------------------------------------------------- |
+| `auto` (default) | Detect local candidates and try **real** sources by priority         |
+| `manual`         | Advanced: user-configured Python command and Codex-Usage script path |
+| `mock`           | Advanced / troubleshooting: bundled demo script (**not real quota**) |
 
 Legacy configs: if a script path is set and `sourceMode` is absent, the app treats the mode as `manual`.
 
 ## Auto priority (ordinary-user path)
 
-| Priority | Kind | Description |
-|----------|------|-------------|
-| 1 | Built-in adapter | Zero-config primary path using local Codex login |
-| 2 | Session-log fallback | Real partial data; missing fields are **not** invented |
-| 3 | Discovered Codex-Usage script | Advanced / developer fallback |
-| — | Manual script | Only when `sourceMode=manual` |
-| last | Mock / demo | UI troubleshooting only; never preferred when a real source exists |
+| Priority | Kind                          | Description                                                        |
+| -------- | ----------------------------- | ------------------------------------------------------------------ |
+| 1        | Built-in adapter              | Zero-config primary path using local Codex login                   |
+| 2        | Session-log fallback          | Real partial data; missing fields are **not** invented             |
+| 3        | Discovered Codex-Usage script | Advanced / developer fallback                                      |
+| —        | Manual script                 | Only when `sourceMode=manual`                                      |
+| last     | Mock / demo                   | UI troubleshooting only; never preferred when a real source exists |
 
 Credentials and login-file contents **never** reach the React UI or the app config file.
 

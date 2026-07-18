@@ -25,14 +25,14 @@ Installers in v0.3.0 are **unsigned**. Windows SmartScreen may warn about an unk
 
 ## What you see
 
-| Area | Meaning |
-|------|---------|
-| Reset credit timeline | One-time spare credits with expiration status |
-| Liquid gauges | Remaining share of the 5-hour and 7-day windows |
-| Recommendations | Tips based on near-expiry credits and remaining limits |
-| History & trends | Local 24-hour / 7-day trends, depletion estimates, recent snapshots, CSV/JSON export |
-| Settings | Language, theme, tray/window behavior, notifications, retention, and source health |
-| Version | App version in the footer and Settings |
+| Area                  | Meaning                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| Reset credit timeline | One-time spare credits with expiration status                                        |
+| Liquid gauges         | Remaining share of the 5-hour and 7-day windows                                      |
+| Recommendations       | Tips based on near-expiry credits and remaining limits                               |
+| History & trends      | Local 24-hour / 7-day trends, depletion estimates, recent snapshots, CSV/JSON export |
+| Settings              | Language, theme, tray/window behavior, notifications, retention, and source health   |
+| Version               | App version in the footer and Settings                                               |
 
 ## When auto-detect fails
 
@@ -50,12 +50,12 @@ Auto mode does **not** fall back to mock when a real source fails.
 
 Common failure reasons:
 
-| Situation | What to do |
-|-----------|------------|
-| No local Codex login | Sign in with Codex on this PC, then refresh |
-| Login expired | Sign in again with Codex, then refresh |
-| Network error | Check connectivity and retry |
-| Upstream response shape changed | Update the app when a fix is released |
+| Situation                       | What to do                                  |
+| ------------------------------- | ------------------------------------------- |
+| No local Codex login            | Sign in with Codex on this PC, then refresh |
+| Login expired                   | Sign in again with Codex, then refresh      |
+| Network error                   | Check connectivity and retry                |
+| Upstream response shape changed | Update the app when a fix is released       |
 
 ## Advanced options
 

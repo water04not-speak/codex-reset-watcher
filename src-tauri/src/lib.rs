@@ -465,6 +465,41 @@ fn run_python(
     })
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .setup(desktop::setup)
+        .on_window_event(desktop::handle_window_event)
+        .invoke_handler(tauri::generate_handler![
+            fetch_codex_raw,
+            fetch_codex_adapter,
+            detect_codex_sources,
+            test_codex_source,
+            read_app_config,
+            write_app_config,
+            history::append_quota_snapshot,
+            history::read_quota_history,
+            history::clear_quota_history,
+            history::export_quota_history,
+            history::write_quota_history_export,
+            notifications::claim_notification_event,
+            diagnostics::build_diagnostic_summary,
+            desktop::apply_window_settings,
+            desktop::configure_tray,
+            desktop::show_main,
+            app_log
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -533,39 +568,4 @@ mod tests {
         let s = sanitize_path_for_display(r"C:\Users\Alice\secret\codex_usage.py");
         assert!(!s.contains("Alice"));
     }
-}
-
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ))
-        .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
-        .setup(desktop::setup)
-        .on_window_event(desktop::handle_window_event)
-        .invoke_handler(tauri::generate_handler![
-            fetch_codex_raw,
-            fetch_codex_adapter,
-            detect_codex_sources,
-            test_codex_source,
-            read_app_config,
-            write_app_config,
-            history::append_quota_snapshot,
-            history::read_quota_history,
-            history::clear_quota_history,
-            history::export_quota_history,
-            history::write_quota_history_export,
-            notifications::claim_notification_event,
-            diagnostics::build_diagnostic_summary,
-            desktop::apply_window_settings,
-            desktop::configure_tray,
-            desktop::show_main,
-            app_log
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
 }

@@ -37,10 +37,7 @@ describe("quota history", () => {
     const repeated = snapshot("2026-07-18T10:02:00.000Z", 80, 60);
     expect(isDuplicateSnapshot(first, repeated)).toBe(true);
     expect(
-      isDuplicateSnapshot(
-        first,
-        snapshot("2026-07-18T10:07:00.000Z", 80, 60),
-      ),
+      isDuplicateSnapshot(first, snapshot("2026-07-18T10:07:00.000Z", 80, 60)),
     ).toBe(false);
   });
 

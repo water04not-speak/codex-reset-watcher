@@ -320,9 +320,7 @@ pub fn write_quota_history_export(
     if destination
         .extension()
         .and_then(|value| value.to_str())
-        .map_or(true, |value| {
-            !value.eq_ignore_ascii_case(expected_extension)
-        })
+        .is_none_or(|value| !value.eq_ignore_ascii_case(expected_extension))
     {
         return Err("export extension does not match format".to_string());
     }

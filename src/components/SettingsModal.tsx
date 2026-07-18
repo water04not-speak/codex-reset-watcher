@@ -1,27 +1,41 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { AppConfig, LanguageCode, Theme } from "../core/types";
+import type {
+  AppConfig,
+  HistoryRetentionDays,
+  LanguageCode,
+  SourceHealthSummary,
+  Theme,
+} from "../core/types";
 import type { SourceCandidate, SourceMode } from "../core/sources/types";
 import { detectCodexSources, testCodexSource } from "../core/bridge";
 import { isRefreshLocked } from "../core/refreshLock";
 import { testCandidateConnection } from "../core/sources";
 import { redactPath } from "../core/privacy";
 import { t } from "../i18n";
+import { DEFAULT_NOTIFICATION_CONFIG } from "../core/config";
+import { DesktopSettingsError } from "../core/desktop";
 
 interface SettingsModalProps {
   config: AppConfig;
   lang: LanguageCode;
   appVersion: string;
   refreshInProgress: boolean;
+  health: SourceHealthSummary;
   onCancel: () => void;
   onSave: (config: AppConfig) => Promise<void> | void;
+  onClearHistory: () => Promise<void> | void;
+  onCopyDiagnostic: () => Promise<void> | void;
 }
 
 const LANGUAGES: LanguageCode[] = ["zh-CN", "en", "ja", "zh-TW"];
 const THEMES: Theme[] = ["dark", "light"];
-const COMING_SOON_FEATURES = new Set(["autoStart", "alwaysOnTop"]);
+const RETENTION_OPTIONS: HistoryRetentionDays[] = [7, 30, 90, 180, null];
 
-function formatDetectedAt(iso: string | null | undefined, lang: LanguageCode): string {
+function formatDetectedAt(
+  iso: string | null | undefined,
+  lang: LanguageCode,
+): string {
   if (!iso) return t("settings.notDetectedYet", lang);
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return t("settings.notDetectedYet", lang);
@@ -33,8 +47,11 @@ export function SettingsModal({
   lang,
   appVersion,
   refreshInProgress,
+  health,
   onCancel,
   onSave,
+  onClearHistory,
+  onCopyDiagnostic,
 }: SettingsModalProps) {
   const [draft, setDraft] = useState<AppConfig>(config);
   const [isSaving, setIsSaving] = useState(false);
@@ -52,6 +69,7 @@ export function SettingsModal({
     kind: "success" | "error";
     text: string;
   } | null>(null);
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(config);
@@ -79,6 +97,11 @@ export function SettingsModal({
   ) => {
     setDraft((current) => ({ ...current, [key]: value }));
     setTestMessage(null);
+  };
+
+  const notifications = draft.notifications ?? DEFAULT_NOTIFICATION_CONFIG;
+  const updateNotifications = (patch: Partial<AppConfig["notifications"]>) => {
+    updateDraft("notifications", { ...notifications, ...patch });
   };
 
   const runDetect = useCallback(async () => {
@@ -115,8 +138,13 @@ export function SettingsModal({
     };
 
     setIsSaving(true);
+    setSettingsMessage(null);
     try {
       await onSave(normalized);
+    } catch (error) {
+      const kind =
+        error instanceof DesktopSettingsError ? error.kind : "general";
+      setSettingsMessage(t(`settings.saveError.${kind}`, lang));
     } finally {
       setIsSaving(false);
     }
@@ -302,7 +330,9 @@ export function SettingsModal({
                   </div>
                   <div>
                     <dt>{t("settings.detectedPath", lang)}</dt>
-                    <dd className="settings-path-value">{currentPathDisplay}</dd>
+                    <dd className="settings-path-value">
+                      {currentPathDisplay}
+                    </dd>
                   </div>
                 </dl>
 
@@ -353,7 +383,9 @@ export function SettingsModal({
                 </div>
 
                 {draft.sourceMode === "mock" && (
-                  <p className="settings-hint">{t("settings.mockHint", lang)}</p>
+                  <p className="settings-hint">
+                    {t("settings.mockHint", lang)}
+                  </p>
                 )}
 
                 {draft.sourceMode === "manual" && (
@@ -538,75 +570,51 @@ export function SettingsModal({
             <fieldset className="settings-fieldset">
               <legend>{t("settings.theme", lang)}</legend>
               <div className="settings-options">
-                {THEMES.map((theme) => {
-                  const isComingSoon = COMING_SOON_FEATURES.has(theme);
-                  return (
-                    <label
-                      key={theme}
-                      className={`settings-option${isComingSoon ? " settings-option-disabled" : ""}`}
-                    >
-                      <input
-                        type="radio"
-                        name="theme"
-                        value={theme}
-                        checked={draft.theme === theme}
-                        disabled={isComingSoon}
-                        onChange={() => updateDraft("theme", theme)}
-                      />
-                      <span>
-                        {t(`settings.theme.${theme}`, lang)}
-                        {isComingSoon && (
-                          <span className="settings-coming-soon">
-                            {t("settings.comingSoon", lang)}
-                          </span>
-                        )}
-                      </span>
-                    </label>
-                  );
-                })}
+                {THEMES.map((theme) => (
+                  <label key={theme} className="settings-option">
+                    <input
+                      type="radio"
+                      name="theme"
+                      value={theme}
+                      checked={draft.theme === theme}
+                      onChange={() => updateDraft("theme", theme)}
+                    />
+                    <span>{t(`settings.theme.${theme}`, lang)}</span>
+                  </label>
+                ))}
               </div>
             </fieldset>
 
             <div className="settings-toggles">
-              <label
-                className={`settings-toggle${COMING_SOON_FEATURES.has("autoStart") ? " settings-option-disabled" : ""}`}
-              >
+              <label className="settings-toggle">
                 <input
                   type="checkbox"
                   checked={draft.autoStart}
-                  disabled={COMING_SOON_FEATURES.has("autoStart")}
                   onChange={(event) =>
                     updateDraft("autoStart", event.target.checked)
                   }
                 />
-                <span>
-                  {t("settings.autoStart", lang)}
-                  {COMING_SOON_FEATURES.has("autoStart") && (
-                    <span className="settings-coming-soon">
-                      {t("settings.comingSoon", lang)}
-                    </span>
-                  )}
-                </span>
+                <span>{t("settings.autoStart", lang)}</span>
               </label>
-              <label
-                className={`settings-toggle${COMING_SOON_FEATURES.has("alwaysOnTop") ? " settings-option-disabled" : ""}`}
-              >
+              <label className="settings-toggle">
                 <input
                   type="checkbox"
                   checked={draft.alwaysOnTop}
-                  disabled={COMING_SOON_FEATURES.has("alwaysOnTop")}
                   onChange={(event) =>
                     updateDraft("alwaysOnTop", event.target.checked)
                   }
                 />
-                <span>
-                  {t("settings.alwaysOnTop", lang)}
-                  {COMING_SOON_FEATURES.has("alwaysOnTop") && (
-                    <span className="settings-coming-soon">
-                      {t("settings.comingSoon", lang)}
-                    </span>
-                  )}
-                </span>
+                <span>{t("settings.alwaysOnTop", lang)}</span>
+              </label>
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={draft.startMinimized}
+                  onChange={(event) =>
+                    updateDraft("startMinimized", event.target.checked)
+                  }
+                />
+                <span>{t("settings.startMinimized", lang)}</span>
               </label>
               <label className="settings-toggle">
                 <input
@@ -629,6 +637,307 @@ export function SettingsModal({
                 <span>{t("settings.performanceMode", lang)}</span>
               </label>
             </div>
+
+            <fieldset className="settings-fieldset">
+              <legend>{t("settings.windowBehavior", lang)}</legend>
+              <div className="settings-options">
+                {(["minimizeToTray", "quit"] as const).map((behavior) => (
+                  <label className="settings-option" key={behavior}>
+                    <input
+                      type="radio"
+                      name="closeBehavior"
+                      checked={
+                        (draft.closeBehavior ?? "minimizeToTray") === behavior
+                      }
+                      onChange={() => updateDraft("closeBehavior", behavior)}
+                    />
+                    <span>{t(`settings.closeBehavior.${behavior}`, lang)}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset className="settings-fieldset">
+              <legend>{t("settings.historySection", lang)}</legend>
+              <label className="settings-field">
+                <span>{t("settings.historyRetention", lang)}</span>
+                <select
+                  value={draft.historyRetentionDays ?? "forever"}
+                  onChange={(event) =>
+                    updateDraft(
+                      "historyRetentionDays",
+                      event.target.value === "forever"
+                        ? null
+                        : (Number(event.target.value) as HistoryRetentionDays),
+                    )
+                  }
+                >
+                  {RETENTION_OPTIONS.map((days) => (
+                    <option key={days ?? "forever"} value={days ?? "forever"}>
+                      {t(`settings.retention.${days ?? "forever"}`, lang)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="btn btn-danger"
+                type="button"
+                onClick={onClearHistory}
+              >
+                {t("settings.clearHistory", lang)}
+              </button>
+            </fieldset>
+
+            <fieldset className="settings-fieldset">
+              <legend>{t("settings.notificationSection", lang)}</legend>
+              <div className="settings-toggles">
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={notifications.enabled}
+                    onChange={(event) =>
+                      updateNotifications({ enabled: event.target.checked })
+                    }
+                  />
+                  <span>{t("settings.notificationsEnabled", lang)}</span>
+                </label>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={notifications.rules.creditExpiry}
+                    onChange={(event) =>
+                      updateNotifications({
+                        rules: {
+                          ...notifications.rules,
+                          creditExpiry: event.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>{t("settings.notifyCreditExpiry", lang)}</span>
+                </label>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={notifications.rules.windowRecovered}
+                    onChange={(event) =>
+                      updateNotifications({
+                        rules: {
+                          ...notifications.rules,
+                          windowRecovered: event.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>{t("settings.notifyWindowRecovered", lang)}</span>
+                </label>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={notifications.rules.depletionRisk}
+                    onChange={(event) =>
+                      updateNotifications({
+                        rules: {
+                          ...notifications.rules,
+                          depletionRisk: event.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>{t("settings.notifyDepletion", lang)}</span>
+                </label>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={notifications.rules.refreshFailures}
+                    onChange={(event) =>
+                      updateNotifications({
+                        rules: {
+                          ...notifications.rules,
+                          refreshFailures: event.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>{t("settings.notifyFailures", lang)}</span>
+                </label>
+                <label className="settings-toggle">
+                  <input
+                    type="checkbox"
+                    checked={notifications.rules.sourceFallback}
+                    onChange={(event) =>
+                      updateNotifications({
+                        rules: {
+                          ...notifications.rules,
+                          sourceFallback: event.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>{t("settings.notifyFallback", lang)}</span>
+                </label>
+              </div>
+              <div className="settings-number-row">
+                <label>
+                  {t("settings.expiryWarningHours", lang)}
+                  <input
+                    type="number"
+                    min={1}
+                    value={notifications.expiryWarningHours}
+                    onChange={(event) =>
+                      updateNotifications({
+                        expiryWarningHours: Math.max(
+                          1,
+                          Number(event.target.value),
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  {t("settings.urgentExpiryHours", lang)}
+                  <input
+                    type="number"
+                    min={1}
+                    value={notifications.urgentExpiryHours}
+                    onChange={(event) =>
+                      updateNotifications({
+                        urgentExpiryHours: Math.max(
+                          1,
+                          Number(event.target.value),
+                        ),
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={notifications.doNotDisturb.enabled}
+                  onChange={(event) =>
+                    updateNotifications({
+                      doNotDisturb: {
+                        ...notifications.doNotDisturb,
+                        enabled: event.target.checked,
+                      },
+                    })
+                  }
+                />
+                <span>{t("settings.dndEnabled", lang)}</span>
+              </label>
+              <div className="settings-number-row">
+                <label>
+                  {t("settings.dndStart", lang)}
+                  <input
+                    type="time"
+                    value={notifications.doNotDisturb.start}
+                    onChange={(event) =>
+                      updateNotifications({
+                        doNotDisturb: {
+                          ...notifications.doNotDisturb,
+                          start: event.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  {t("settings.dndEnd", lang)}
+                  <input
+                    type="time"
+                    value={notifications.doNotDisturb.end}
+                    onChange={(event) =>
+                      updateNotifications({
+                        doNotDisturb: {
+                          ...notifications.doNotDisturb,
+                          end: event.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={notifications.doNotDisturb.allowUrgent}
+                  onChange={(event) =>
+                    updateNotifications({
+                      doNotDisturb: {
+                        ...notifications.doNotDisturb,
+                        allowUrgent: event.target.checked,
+                      },
+                    })
+                  }
+                />
+                <span>{t("settings.dndAllowUrgent", lang)}</span>
+              </label>
+            </fieldset>
+
+            <fieldset className="settings-fieldset">
+              <legend>{t("settings.healthSection", lang)}</legend>
+              <dl className="settings-status-grid">
+                <div>
+                  <dt>{t("settings.health.source", lang)}</dt>
+                  <dd>{health.sourceType}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.health.real", lang)}</dt>
+                  <dd>{t(health.isReal ? "common.yes" : "common.no", lang)}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.health.lastSuccess", lang)}</dt>
+                  <dd>{formatDetectedAt(health.lastSuccessAt, lang)}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.health.duration", lang)}</dt>
+                  <dd>{health.lastDurationMs ?? t("common.unknown", lang)}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.health.failures", lang)}</dt>
+                  <dd>{health.consecutiveFailures}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.health.adapter", lang)}</dt>
+                  <dd>{t(`tray.status.${health.adapterHealth}`, lang)}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.health.fallback", lang)}</dt>
+                  <dd>
+                    {t(health.isFallback ? "common.yes" : "common.no", lang)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t("settings.health.demo", lang)}</dt>
+                  <dd>{t(health.isDemo ? "common.yes" : "common.no", lang)}</dd>
+                </div>
+              </dl>
+              {health.lastErrorSummary && (
+                <p className="settings-hint">{health.lastErrorSummary}</p>
+              )}
+              <div className="settings-detect-row">
+                <button className="btn" type="button" onClick={runDetect}>
+                  {t("settings.redetect", lang)}
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={onCopyDiagnostic}
+                >
+                  {t("settings.copyDiagnostic", lang)}
+                </button>
+              </div>
+            </fieldset>
+
+            {settingsMessage && (
+              <p
+                className="settings-test-message settings-test-message-error"
+                role="alert"
+              >
+                {settingsMessage}
+              </p>
+            )}
           </div>
         </div>
 

@@ -9,6 +9,28 @@
   "autoStart": false,
   "alwaysOnTop": false,
   "startMinimized": false,
+  "closeBehavior": "minimizeToTray",
+  "historyRetentionDays": 90,
+  "persistDemoHistory": false,
+  "notifications": {
+    "enabled": true,
+    "paused": false,
+    "expiryWarningHours": 72,
+    "urgentExpiryHours": 24,
+    "rules": {
+      "creditExpiry": true,
+      "windowRecovered": true,
+      "depletionRisk": true,
+      "refreshFailures": true,
+      "sourceFallback": true
+    },
+    "doNotDisturb": {
+      "enabled": false,
+      "start": "22:00",
+      "end": "08:00",
+      "allowUrgent": true
+    }
+  },
   "_comment_language": "界面语言：zh-CN | en | ja | zh-TW",
   "language": "zh-CN",
   "_comment_theme": "主题：dark | light",

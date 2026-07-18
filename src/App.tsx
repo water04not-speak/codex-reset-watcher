@@ -1,10 +1,26 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { save } from "@tauri-apps/plugin-dialog";
 import "./App.css";
-import { refreshAppState, loadConfig, saveConfig } from "./core/bridge";
+import {
+  appendQuotaSnapshot,
+  buildDiagnosticSummary,
+  claimNotificationEvent,
+  clearQuotaHistory,
+  loadConfig,
+  readQuotaHistory,
+  refreshAppState,
+  saveConfig,
+  writeQuotaHistoryExport,
+} from "./core/bridge";
 import { normalizeConfig, DEFAULT_CONFIG } from "./core/config";
 import { createInitialAppState } from "./core/parser";
-import type { AppState, AppConfig } from "./core/types";
+import type {
+  AppState,
+  AppConfig,
+  QuotaHistorySnapshot,
+  SourceHealthSummary,
+} from "./core/types";
 import {
   classifyConnectionStatus,
   hasQuotaData,
@@ -22,9 +38,33 @@ import { RefreshProgress } from "./components/RefreshProgress";
 import { redactPath } from "./core/privacy";
 import { setRefreshLock } from "./core/refreshLock";
 import { useAppVersion } from "./hooks/useAppVersion";
+import { createQuotaSnapshot } from "./core/history";
+import { analyzeUsageHistory } from "./core/trends";
+import { evaluateAlertEvents, shouldDelayAlert } from "./core/alerts";
+import {
+  applyDesktopSettings,
+  configureTray,
+  registerDesktopEventHandlers,
+  sendAlertNotification,
+} from "./core/desktop";
+import { sanitizeErrorMessage } from "./core/privacy";
+import { HistoryPage } from "./components/HistoryPage";
+import { buildUsageRecommendations } from "./core/recommend";
 
 const DATA_SOURCE_DOCS_URL =
   "https://github.com/water04not-speak/codex-reset-watcher/blob/main/docs/DATA_SOURCE.md";
+
+const EMPTY_HEALTH: SourceHealthSummary = {
+  sourceType: "none",
+  isReal: false,
+  lastSuccessAt: null,
+  lastDurationMs: null,
+  consecutiveFailures: 0,
+  lastErrorSummary: null,
+  adapterHealth: "unavailable",
+  isFallback: false,
+  isDemo: false,
+};
 
 function App() {
   const appVersion = useAppVersion();
@@ -39,12 +79,17 @@ function App() {
   );
   const [connectionStatus, setConnectionStatus] =
     useState<SourceConnectionStatus>("idle");
+  const [snapshots, setSnapshots] = useState<QuotaHistorySnapshot[]>([]);
+  const [health, setHealth] = useState<SourceHealthSummary>(EMPTY_HEALTH);
+  const [page, setPage] = useState<"overview" | "history">("overview");
 
   const configRef = useRef(config);
   const stateRef = useRef(state);
   const langRef = useRef(lang);
   const isRefreshingRef = useRef(false);
   const initialRefreshDone = useRef(false);
+  const healthRef = useRef(health);
+  const snapshotsRef = useRef(snapshots);
 
   useEffect(() => {
     configRef.current = config;
@@ -59,13 +104,24 @@ function App() {
   }, [lang]);
 
   useEffect(() => {
-    loadConfig().then((loaded) => {
-      const normalized = normalizeConfig(loaded ?? DEFAULT_CONFIG);
-      setConfig(normalized);
-      setLanguage(normalized.language);
-      setLangState(normalized.language);
-      setConfigLoaded(true);
-    });
+    healthRef.current = health;
+  }, [health]);
+
+  useEffect(() => {
+    snapshotsRef.current = snapshots;
+  }, [snapshots]);
+
+  useEffect(() => {
+    Promise.all([loadConfig(), readQuotaHistory().catch(() => [])]).then(
+      ([loaded, history]) => {
+        const normalized = normalizeConfig(loaded ?? DEFAULT_CONFIG);
+        setConfig(normalized);
+        setLanguage(normalized.language);
+        setLangState(normalized.language);
+        setSnapshots(history);
+        setConfigLoaded(true);
+      },
+    );
   }, []);
 
   useEffect(() => {
@@ -85,17 +141,20 @@ function App() {
     const currentConfig = configRef.current;
     const currentLang = langRef.current;
     const previous = stateRef.current;
+    const previousHealth = healthRef.current;
+    const startedAt = Date.now();
 
     try {
-      const { state: newState, resolved, detection } = await refreshAppState(
-        currentConfig,
-        {
-          strategy: "all",
-          lang: currentLang,
-          previous,
-          timeoutSecs: currentConfig.commandTimeoutSeconds,
-        },
-      );
+      const {
+        state: newState,
+        resolved,
+        detection,
+      } = await refreshAppState(currentConfig, {
+        strategy: "all",
+        lang: currentLang,
+        previous,
+        timeoutSecs: currentConfig.commandTimeoutSeconds,
+      });
       setState(newState);
       setResolvedSource(resolved);
 
@@ -108,13 +167,102 @@ function App() {
       });
       setConnectionStatus(nextStatus);
 
+      const durationMs = Date.now() - startedAt;
+      const isDemo =
+        currentConfig.sourceMode === "mock" || newState.codex.source === "mock";
+      const isFallback =
+        resolved?.kind === "codex-quota-widget-compatible" ||
+        newState.codex.source.includes("session-log");
+      const sourceType = newState.codex.source || resolved?.kind || "none";
+      const nextHealth: SourceHealthSummary = {
+        sourceType,
+        isReal: hasData && !isDemo,
+        lastSuccessAt: hasData
+          ? (newState.codex.lastRefreshAt ?? new Date().toISOString())
+          : previousHealth.lastSuccessAt,
+        lastDurationMs: durationMs,
+        consecutiveFailures: hasData
+          ? 0
+          : previousHealth.consecutiveFailures + 1,
+        lastErrorSummary:
+          newState.codex.errors.length > 0
+            ? sanitizeErrorMessage(newState.codex.errors[0])
+            : null,
+        adapterHealth: isDemo
+          ? "mock"
+          : hasData
+            ? isFallback
+              ? "degraded"
+              : "healthy"
+            : "unavailable",
+        isFallback,
+        isDemo,
+      };
+      healthRef.current = nextHealth;
+      setHealth(nextHealth);
+
+      let nextSnapshots = snapshotsRef.current;
+      const snapshot = createQuotaSnapshot({
+        state: newState,
+        sourceType,
+        sourceHealth: nextHealth.adapterHealth,
+        fetchDurationMs: durationMs,
+        isDemo,
+      });
+      if (hasData && (!isDemo || currentConfig.persistDemoHistory)) {
+        try {
+          await appendQuotaSnapshot(
+            snapshot,
+            currentConfig.historyRetentionDays === null
+              ? null
+              : (currentConfig.historyRetentionDays ?? 90),
+          );
+          nextSnapshots = await readQuotaHistory();
+          snapshotsRef.current = nextSnapshots;
+          setSnapshots(nextSnapshots);
+        } catch {
+          // History failure must not make live quota refresh fail.
+        }
+      }
+
+      const currentTrend = analyzeUsageHistory(nextSnapshots);
+      const alertConfig =
+        currentConfig.notifications ?? DEFAULT_CONFIG.notifications;
+      if (alertConfig) {
+        const events = evaluateAlertEvents({
+          current: snapshot,
+          previous:
+            nextSnapshots.length > 1
+              ? nextSnapshots[nextSnapshots.length - 2]
+              : null,
+          trend: currentTrend,
+          health: nextHealth,
+          previousHealth,
+          config: alertConfig,
+        });
+        for (const event of events) {
+          if (shouldDelayAlert(event, alertConfig, new Date())) continue;
+          try {
+            if (await claimNotificationEvent(event.key)) {
+              await sendAlertNotification(event, currentLang);
+            }
+          } catch {
+            // Notification failures are intentionally non-fatal.
+          }
+        }
+      }
+
+      await configureTray({
+        config: currentConfig,
+        status: t(`tray.status.${nextHealth.adapterHealth}`, currentLang),
+      });
+
       if (currentConfig.sourceMode === "auto") {
         const detectedAt = new Date().toISOString();
         setConfig((c) => ({
           ...c,
           lastDetectedAt: detectedAt,
-          detectedSourceCache:
-            detection?.candidates ?? c.detectedSourceCache,
+          detectedSourceCache: detection?.candidates ?? c.detectedSourceCache,
           selectedSourceId:
             resolved?.candidateId ??
             detection?.recommended ??
@@ -122,15 +270,52 @@ function App() {
         }));
       }
     } catch (err) {
-      console.error("Refresh failed:", err);
+      console.error("Refresh failed:", sanitizeErrorMessage(String(err)));
       setConnectionStatus("detectFailed");
       setResolvedSource(null);
+      const nextHealth: SourceHealthSummary = {
+        ...healthRef.current,
+        lastDurationMs: Date.now() - startedAt,
+        consecutiveFailures: healthRef.current.consecutiveFailures + 1,
+        lastErrorSummary: sanitizeErrorMessage(String(err)),
+        adapterHealth: "unavailable",
+        isFallback: false,
+      };
+      healthRef.current = nextHealth;
+      setHealth(nextHealth);
     } finally {
       isRefreshingRef.current = false;
       setRefreshLock(false);
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!configLoaded) return;
+    let cleanup: (() => void) | undefined;
+    void registerDesktopEventHandlers({
+      onRefresh: () => void refresh(),
+      onOpenSettings: () => setIsSettingsOpen(true),
+      onOpenHistory: () => setPage("history"),
+      onToggleNotifications: () => {
+        const current = configRef.current;
+        const notifications =
+          current.notifications ?? DEFAULT_CONFIG.notifications;
+        if (!notifications) return;
+        const next = normalizeConfig({
+          ...current,
+          notifications: { ...notifications, paused: !notifications.paused },
+        });
+        configRef.current = next;
+        setConfig(next);
+        void saveConfig(next);
+        void configureTray({ config: next });
+      },
+    }).then((stop) => {
+      cleanup = stop;
+    });
+    return () => cleanup?.();
+  }, [configLoaded, refresh]);
 
   useEffect(() => {
     if (!configLoaded) return;
@@ -186,7 +371,14 @@ function App() {
     );
     if (expiringCredits.length > 0 || tightWindows.length > 0) return "warning";
     return "normal";
-  }, [connectionStatus, state.codex.errors, state.resetCredits, state.sessionWindow, state.weeklyWindow, hasData]);
+  }, [
+    connectionStatus,
+    state.codex.errors,
+    state.resetCredits,
+    state.sessionWindow,
+    state.weeklyWindow,
+    hasData,
+  ]);
 
   const showEmptyState = useMemo(
     () =>
@@ -236,21 +428,37 @@ function App() {
     [config.redactPathsInUi],
   );
 
+  const trend = useMemo(() => analyzeUsageHistory(snapshots), [snapshots]);
+  const displayState = useMemo(() => {
+    const trendRecommendations = buildUsageRecommendations(trend, health, lang);
+    if (trendRecommendations.length === 0) return state;
+    const allGood = t("rec.allGood", lang);
+    return {
+      ...state,
+      recommendation: [
+        ...state.recommendation.filter((message) => message !== allGood),
+        ...trendRecommendations,
+      ],
+    };
+  }, [state, trend, health, lang]);
+
   const applyConfigAndRefresh = async (nextConfig: AppConfig) => {
     const normalized = normalizeConfig(nextConfig);
     await saveConfig(normalized);
+    await applyDesktopSettings(normalized);
     // Keep ref in sync before refresh to avoid stale sourceMode races.
     configRef.current = normalized;
     setConfig(normalized);
     setLanguage(normalized.language);
     setLangState(normalized.language);
     setConnectionStatus("idle");
+    await configureTray({ config: normalized });
     await refresh();
   };
 
   const handleSaveSettings = async (nextConfig: AppConfig) => {
-    setIsSettingsOpen(false);
     await applyConfigAndRefresh(nextConfig);
+    setIsSettingsOpen(false);
   };
 
   const handleUseMock = async () => {
@@ -280,6 +488,28 @@ function App() {
     }
   };
 
+  const handleClearHistory = async () => {
+    if (!window.confirm(t("history.clearConfirm", lang))) return;
+    await clearQuotaHistory();
+    snapshotsRef.current = [];
+    setSnapshots([]);
+  };
+
+  const handleExport = async (format: "csv" | "json") => {
+    const path = await save({
+      defaultPath: `codex-reset-watcher-history.${format}`,
+      filters: [{ name: format.toUpperCase(), extensions: [format] }],
+    });
+    if (typeof path === "string") {
+      await writeQuotaHistoryExport(path, format);
+    }
+  };
+
+  const handleCopyDiagnostic = async () => {
+    const summary = await buildDiagnosticSummary({ appVersion, health });
+    await navigator.clipboard.writeText(summary);
+  };
+
   return (
     <div className={`app${isSettingsOpen ? " modal-open" : ""}`}>
       <AppHeader
@@ -291,6 +521,23 @@ function App() {
         onRefresh={refresh}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
+
+      <nav className="app-tabs" aria-label={t("nav.label", lang)}>
+        <button
+          type="button"
+          className={page === "overview" ? "active" : ""}
+          onClick={() => setPage("overview")}
+        >
+          {t("nav.overview", lang)}
+        </button>
+        <button
+          type="button"
+          className={page === "history" ? "active" : ""}
+          onClick={() => setPage("history")}
+        >
+          {t("nav.history", lang)}
+        </button>
+      </nav>
 
       {banner && (
         <div
@@ -317,9 +564,9 @@ function App() {
         />
       )}
 
-      {!showEmptyState && (!loading || hasData) ? (
+      {page === "overview" && !showEmptyState && (!loading || hasData) ? (
         <MainContent
-          state={state}
+          state={displayState}
           config={config}
           lang={lang}
           resolvedSource={resolvedSource}
@@ -327,7 +574,20 @@ function App() {
         />
       ) : null}
 
-      <footer className="app-version-footer" aria-label={t("app.version", lang)}>
+      {page === "history" && (
+        <HistoryPage
+          snapshots={snapshots}
+          trend={trend}
+          lang={lang}
+          onExport={(format) => void handleExport(format)}
+          onClear={() => void handleClearHistory()}
+        />
+      )}
+
+      <footer
+        className="app-version-footer"
+        aria-label={t("app.version", lang)}
+      >
         {t("app.titleBrand", lang)} {t("app.titleRest", lang)} v{appVersion}
       </footer>
 
@@ -337,8 +597,11 @@ function App() {
           lang={lang}
           appVersion={appVersion}
           refreshInProgress={loading}
+          health={health}
           onCancel={() => setIsSettingsOpen(false)}
           onSave={handleSaveSettings}
+          onClearHistory={handleClearHistory}
+          onCopyDiagnostic={handleCopyDiagnostic}
         />
       )}
     </div>

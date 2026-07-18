@@ -1,6 +1,8 @@
 //! Codex Reset Watcher —— 核心数据桥（Rust 侧）。
 
+mod desktop;
 mod history;
+mod notifications;
 mod sanitize;
 mod session_log;
 mod source_detect;
@@ -535,8 +537,15 @@ mod tests {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(desktop::setup)
+        .on_window_event(desktop::handle_window_event)
         .invoke_handler(tauri::generate_handler![
             fetch_codex_raw,
             fetch_codex_adapter,
@@ -548,6 +557,11 @@ pub fn run() {
             history::read_quota_history,
             history::clear_quota_history,
             history::export_quota_history,
+            history::write_quota_history_export,
+            notifications::claim_notification_event,
+            desktop::apply_window_settings,
+            desktop::configure_tray,
+            desktop::show_main,
             app_log
         ])
         .run(tauri::generate_context!())

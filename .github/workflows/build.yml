@@ -262,3 +262,4 @@ jobs:
           files: |
             release-artifacts/codex-reset-watcher.exe
             release-artifacts/codex-reset-watcher_*_x64-setup.exe
+            release-artifacts/artifact-manifest.txt

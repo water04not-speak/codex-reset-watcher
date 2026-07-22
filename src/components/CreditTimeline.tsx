@@ -30,7 +30,10 @@ function formatTopDate(iso: string | null, lang: LanguageCode): string {
   }).format(date);
 }
 
-function statusLabel(status: ResetCredit["status"], lang: LanguageCode): string {
+function statusLabel(
+  status: ResetCredit["status"],
+  lang: LanguageCode,
+): string {
   return t(`status.${status}`, lang);
 }
 
@@ -61,9 +64,7 @@ function CreditNode({
         </span>
       </div>
       <div className="credit-node-date-bottom">
-        {credit.expiresAt
-          ? formatShortDate(credit.expiresAt, lang)
-          : "—"}
+        {credit.expiresAt ? formatShortDate(credit.expiresAt, lang) : "—"}
       </div>
     </div>
   );

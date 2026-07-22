@@ -35,9 +35,9 @@ describe("connectionStatus", () => {
     expect(classifyErrorMessage("Codex 登录可能已失效，请重新登录 Codex")).toBe(
       "authExpired",
     );
-    expect(classifyErrorMessage("无法连接 Codex API，请检查网络或稍后重试")).toBe(
-      "networkError",
-    );
+    expect(
+      classifyErrorMessage("无法连接 Codex API，请检查网络或稍后重试"),
+    ).toBe("networkError");
     expect(classifyErrorMessage("No usable Codex login was detected.")).toBe(
       "needsLogin",
     );

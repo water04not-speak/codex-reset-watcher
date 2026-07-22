@@ -156,14 +156,25 @@ export function parseResetCredits(
     const sourceStatus = asString(item.status) ?? "unknown";
     const grantedAt = asString(item.granted_at);
     const expiresAt = asString(item.expires_at);
+    const sourceId =
+      asString(item.id) ?? asString(item.credit_id) ?? asString(item.reset_id);
+    const amount =
+      asNumber(item.original_amount) ??
+      asNumber(item.granted_amount) ??
+      asNumber(item.amount);
+    const remaining =
+      asNumber(item.remaining_amount) ?? asNumber(item.remaining);
     const remainingSeconds = computeRemainingSeconds(expiresAt, now);
     const status = computeResetCreditStatus(remainingSeconds, sourceStatus);
     return {
       index,
+      sourceId,
       resetType: asString(item.reset_type) ?? "",
       sourceStatus,
       grantedAt,
       expiresAt,
+      amount,
+      remaining,
       remainingSeconds,
       remainingText:
         remainingSeconds === null
@@ -288,11 +299,7 @@ export function parseUsageSummary(
       if (isRecord(first)) topModel = asString(first.model);
     }
 
-    if (
-      todayTokens !== null ||
-      thirtyDayTokens !== null ||
-      topModel !== null
-    ) {
+    if (todayTokens !== null || thirtyDayTokens !== null || topModel !== null) {
       return {
         todayTokens,
         thirtyDayTokens,

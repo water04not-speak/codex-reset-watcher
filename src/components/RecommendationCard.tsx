@@ -10,10 +10,7 @@ interface RecommendationCardProps {
 
 type RiskLevel = "normal" | "gold" | "alert";
 
-function classifyRecommendation(
-  rec: string,
-  lang: LanguageCode,
-): RiskLevel {
+function classifyRecommendation(rec: string, lang: LanguageCode): RiskLevel {
   if (rec === t("rec.fetchFailed", lang)) return "alert";
   if (rec === t("rec.allGood", lang)) return "normal";
 
@@ -42,16 +39,11 @@ export const RecommendationCard = memo(function RecommendationCard({
 }: RecommendationCardProps) {
   const items = useMemo(
     () =>
-      recommendations.length === 0
-        ? [t("rec.allGood", lang)]
-        : recommendations,
+      recommendations.length === 0 ? [t("rec.allGood", lang)] : recommendations,
     [recommendations, lang],
   );
 
-  const level = useMemo(
-    () => getOverallLevel(items, lang),
-    [items, lang],
-  );
+  const level = useMemo(() => getOverallLevel(items, lang), [items, lang]);
   const prefix = t("rec.prefix", lang);
 
   return (

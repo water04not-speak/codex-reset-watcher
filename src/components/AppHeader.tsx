@@ -80,7 +80,9 @@ export const AppHeader = memo(function AppHeader({
           onClick={onRefresh}
           disabled={loading}
           type="button"
-          title={loading ? t("app.refreshing", lang) : t("btn.refreshNow", lang)}
+          title={
+            loading ? t("app.refreshing", lang) : t("btn.refreshNow", lang)
+          }
           aria-label={
             loading ? t("app.refreshing", lang) : t("btn.refreshNow", lang)
           }

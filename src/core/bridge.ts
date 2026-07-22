@@ -7,13 +7,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { buildAppState } from "./parser";
 import { sanitizeErrorMessage } from "./privacy";
 import { isRefreshLocked } from "./refreshLock";
+import { parseConfigText } from "./config";
 import { refreshBySourceMode } from "./sources";
 import type {
   AppConfig,
   AppState,
   LanguageCode,
+  HistoryRetentionDays,
+  QuotaHistorySnapshot,
   RawFetchKind,
   RawFetchResult,
+  SourceHealthSummary,
 } from "./types";
 import type { ResolvedSource, SourceDetectionResult } from "./sources/types";
 
@@ -119,7 +123,7 @@ export async function loadConfig(): Promise<AppConfig | null> {
   try {
     const raw = await invoke<string | null>("read_app_config");
     if (!raw) return null;
-    return JSON.parse(raw) as AppConfig;
+    return parseConfigText(raw);
   } catch {
     return null;
   }
@@ -137,6 +141,71 @@ export async function saveConfig(config: AppConfig): Promise<void> {
   };
   await invoke("write_app_config", {
     contents: JSON.stringify(normalized, null, 2),
+  });
+}
+
+export interface AppendSnapshotResult {
+  stored: boolean;
+  deduplicated: boolean;
+  total: number;
+}
+
+export async function appendQuotaSnapshot(
+  snapshot: QuotaHistorySnapshot,
+  retentionDays: HistoryRetentionDays,
+): Promise<AppendSnapshotResult> {
+  return invoke<AppendSnapshotResult>("append_quota_snapshot", {
+    snapshot,
+    retentionDays,
+  });
+}
+
+export async function readQuotaHistory(): Promise<QuotaHistorySnapshot[]> {
+  return invoke<QuotaHistorySnapshot[]>("read_quota_history");
+}
+
+export async function clearQuotaHistory(): Promise<void> {
+  await invoke("clear_quota_history");
+}
+
+export async function exportQuotaHistory(
+  format: "csv" | "json",
+): Promise<string> {
+  return invoke<string>("export_quota_history", { format });
+}
+
+export async function writeQuotaHistoryExport(
+  path: string,
+  format: "csv" | "json",
+): Promise<void> {
+  await invoke("write_quota_history_export", { path, format });
+}
+
+export async function claimNotificationEvent(
+  eventKey: string,
+): Promise<boolean> {
+  return invoke<boolean>("claim_notification_event", { eventKey });
+}
+
+export async function isNotificationEventClaimed(
+  eventKey: string,
+): Promise<boolean> {
+  return invoke<boolean>("is_notification_event_claimed", { eventKey });
+}
+
+export async function buildDiagnosticSummary(options: {
+  appVersion: string;
+  health: SourceHealthSummary;
+  at?: string;
+}): Promise<string> {
+  return invoke<string>("build_diagnostic_summary", {
+    input: {
+      appVersion: options.appVersion,
+      sourceType: options.health.sourceType,
+      statusClass: options.health.adapterHealth,
+      at: options.at ?? new Date().toISOString(),
+      durationMs: options.health.lastDurationMs,
+    },
   });
 }
 

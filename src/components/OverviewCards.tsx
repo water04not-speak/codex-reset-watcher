@@ -1,12 +1,7 @@
 import { memo, useMemo } from "react";
 import type { AppState, LanguageCode } from "../core/types";
 import { t } from "../i18n";
-import {
-  IconTicket,
-  IconClock,
-  IconWindow5h,
-  IconWindow7d,
-} from "./Icons";
+import { IconTicket, IconClock, IconWindow5h, IconWindow7d } from "./Icons";
 
 interface OverviewCardsProps {
   state: AppState;

@@ -8,6 +8,9 @@
 - Logs record source kind, duration, status, output length, and sanitized error summaries — **not** raw output.
 - No data is uploaded to any server operated by this project.
 - Settings are stored only in this application's local Windows app data directory.
+- Local history uses typed Rust structs with unknown fields rejected; credentials and raw responses cannot be accepted as snapshot fields.
+- Diagnostic summaries allow only app/OS basics, source/status categories, time, and duration; paths, usernames, emails, auth material, tokens, and raw responses are excluded.
+- Notification persistence contains stable event keys and timestamps only.
 
 ## Built-in adapter boundary
 

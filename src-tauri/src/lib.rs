@@ -1,8 +1,13 @@
 //! Codex Reset Watcher —— 核心数据桥（Rust 侧）。
 
+mod desktop;
+mod diagnostics;
+mod history;
+mod notifications;
 mod sanitize;
 mod session_log;
 mod source_detect;
+mod storage;
 mod wham_adapter;
 
 use std::io::Read;
@@ -66,10 +71,9 @@ fn read_app_config(app: AppHandle) -> Result<Option<String>, String> {
 #[tauri::command]
 fn write_app_config(app: AppHandle, contents: String) -> Result<(), String> {
     let path = config_path(&app)?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(&path, contents).map_err(|e| e.to_string())
+    // Validate JSON before replacing the user's last known-good config.
+    serde_json::from_str::<serde_json::Value>(&contents).map_err(|e| e.to_string())?;
+    storage::atomic_write(&path, contents.as_bytes())
 }
 
 fn config_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
@@ -461,6 +465,42 @@ fn run_python(
     })
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .setup(desktop::setup)
+        .on_window_event(desktop::handle_window_event)
+        .invoke_handler(tauri::generate_handler![
+            fetch_codex_raw,
+            fetch_codex_adapter,
+            detect_codex_sources,
+            test_codex_source,
+            read_app_config,
+            write_app_config,
+            history::append_quota_snapshot,
+            history::read_quota_history,
+            history::clear_quota_history,
+            history::export_quota_history,
+            history::write_quota_history_export,
+            notifications::is_notification_event_claimed,
+            notifications::claim_notification_event,
+            diagnostics::build_diagnostic_summary,
+            desktop::apply_window_settings,
+            desktop::configure_tray,
+            desktop::show_main,
+            app_log
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -529,22 +569,4 @@ mod tests {
         let s = sanitize_path_for_display(r"C:\Users\Alice\secret\codex_usage.py");
         assert!(!s.contains("Alice"));
     }
-}
-
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![
-            fetch_codex_raw,
-            fetch_codex_adapter,
-            detect_codex_sources,
-            test_codex_source,
-            read_app_config,
-            write_app_config,
-            app_log
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
 }

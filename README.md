@@ -2,11 +2,11 @@
 
 > **Windows users:** download the `.exe` installer or portable exe from [Releases](https://github.com/water04not-speak/codex-reset-watcher/releases). You do **not** need the source archive.
 
-A lightweight Windows desktop app for visualizing Codex reset credit expiration timelines, 5-hour and 7-day rate limit windows, and smart usage recommendations.
+A local-first desktop companion for monitoring Codex usage history, reset windows, expiring credits, trends, and actionable alerts.
 
 For Windows users already signed into Codex, the app **usually reads real quota automatically** with no Codex-Usage or Python setup. Boundaries: local login required, network reachable, and upstream API shapes compatible.
 
-**v0.2.3** shows the app version in the UI and makes the “no usable Codex login” state clearer (warning, not a normal empty dashboard).
+**v0.3.0** turns the app into an always-available usage companion with local history, deterministic trend estimates, system tray controls, Windows notifications, source-health diagnostics, and sanitized CSV/JSON export.
 
 **v0.2.1** added slow refresh progress messaging and hardened the zero-config primary path (built-in adapter first).
 
@@ -19,6 +19,10 @@ For Windows users already signed into Codex, the app **usually reads real quota 
 - **Credit Timeline**: Visual cards with color-coded expiration status
 - **Liquid Gauges**: Progress indicators for 5-hour and 7-day rate limit windows
 - **Smart Recommendations**: Context-aware usage tips based on reset credits and remaining limits
+- **Local History & Trends**: Privacy-preserving quota snapshots, 24-hour / 7-day usage, and explainable depletion estimates
+- **Actionable Alerts**: Expiry, recovered-window, depletion, refresh-failure, and source-fallback notifications with deduplication and do-not-disturb hours
+- **Desktop Companion**: System tray, launch at startup, always on top, start minimized, and configurable close behavior
+- **Source Health**: Real/fallback/demo status, refresh timing, consecutive failures, and a strictly sanitized diagnostic summary
 - **Multi-language**: zh-CN / en / ja / zh-TW
 - **Dark / light themes**: Switchable in Settings (light theme is available but still subject to visual polish)
 - **Privacy-first**: All data stays local, with sanitized logs and no cloud sync
@@ -35,9 +39,9 @@ Screenshot assets may be present under `docs/screenshots/`. To preview the UI wi
 2. Run `codex-reset-watcher.exe` or install the NSIS package.
 3. On first launch, **auto-detect** runs by default. If you are already signed into Codex and the network is reachable, real quota usually appears without further setup.
 4. Click **Refresh now** if you want an immediate refresh.
-5. The UI footer and Settings show the app version (for example `v0.2.3`).
+5. The UI footer and Settings show the app version (for example `v0.3.0`).
 
-Windows installers are **unsigned** in v0.2.x; SmartScreen may show a warning. MSI builds, when present, are for administrator / enterprise deployment and are not recommended for ordinary non-admin installs.
+Windows installers are **unsigned** in v0.3.0; SmartScreen may show a warning. MSI builds, when present, are for administrator / enterprise deployment and are not recommended for ordinary non-admin installs.
 
 If the app reports that no usable Codex login was detected, sign in to Codex on this PC, confirm Codex works normally, then return and refresh. If you previously switched to **demo / mock data**, open **Settings → Data source** and switch back to **Auto-detect** (demo data is not real quota).
 
@@ -84,10 +88,9 @@ See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [docs/DATA_SOURCE.
 
 - Windows installers are unsigned.
 - MSI is not recommended for ordinary non-admin installs; use NSIS or the portable exe.
-- System tray is not available yet.
-- Launch at startup and always on top are shown as coming soon.
-- Start minimized is stored in config only and not exposed in Settings.
-- Desktop UI automation coverage is still limited.
+- Windows notifications require the user to grant operating-system permission.
+- Trend and depletion estimates remain unavailable until at least two valid snapshots span five minutes.
+- Clicking the close button minimizes to tray by default; choose direct quit in Settings if preferred.
 - Upstream Codex data shapes may change and require an app update.
 - Light theme is available but still subject to visual polish.
 

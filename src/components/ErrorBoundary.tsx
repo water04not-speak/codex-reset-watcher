@@ -37,7 +37,11 @@ export class ErrorBoundary extends Component<
       <div className="error-boundary">
         <h2>{t("errorBoundary.title", lang)}</h2>
         <p>{t("errorBoundary.message", lang)}</p>
-        <button className="btn btn-primary" type="button" onClick={this.handleReload}>
+        <button
+          className="btn btn-primary"
+          type="button"
+          onClick={this.handleReload}
+        >
           {t("errorBoundary.reload", lang)}
         </button>
       </div>

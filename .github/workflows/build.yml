@@ -94,15 +94,19 @@ jobs:
         working-directory: src-tauri
         run: cargo check
 
+      - name: Cargo format check
+        working-directory: src-tauri
+        run: cargo fmt --check
+
       - name: Cargo clippy
         working-directory: src-tauri
-        run: cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Cargo test
         working-directory: src-tauri
         run: cargo test
 
-      # Windows installers are unsigned in v0.2.x.
+      # Windows installers are unsigned in v0.3.x.
       # Build once; portable and NSIS must come from this same workspace output.
       - name: Build Tauri
         run: npm run tauri build
@@ -143,6 +147,9 @@ jobs:
           }
 
           $stage = "release-stage"
+          if (Test-Path -LiteralPath $stage) {
+            Remove-Item -LiteralPath $stage -Recurse -Force
+          }
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
           Copy-Item -Force $portableSrc (Join-Path $stage "codex-reset-watcher.exe")
           Copy-Item -Force $nsisSrc (Join-Path $stage $nsisPattern)

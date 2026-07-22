@@ -3,7 +3,13 @@
  * 用法：node scripts/qa-system-test.mjs
  */
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
@@ -78,30 +84,48 @@ function runParserTests() {
   if (vitest.status === 0) {
     record("parser", "vitest qa-parser suite", true);
   } else {
-    record("parser", "vitest qa-parser suite", false, vitest.stderr?.slice(0, 200) || "exit " + vitest.status);
+    record(
+      "parser",
+      "vitest qa-parser suite",
+      false,
+      vitest.stderr?.slice(0, 200) || "exit " + vitest.status,
+    );
   }
 }
 
 async function exceptionTests() {
   // 1. python-not-found
-  const badPy = spawnSync("python-not-found", ["--version"], { encoding: "utf8" });
+  const badPy = spawnSync("python-not-found", ["--version"], {
+    encoding: "utf8",
+  });
   record("exception", "python-not-found command fails", badPy.status !== 0);
 
   // 2. missing script
-  const missing = spawnSync("python", [join(fixturesDir, "does_not_exist.py")], {
-    encoding: "utf8",
-  });
+  const missing = spawnSync(
+    "python",
+    [join(fixturesDir, "does_not_exist.py")],
+    {
+      encoding: "utf8",
+    },
+  );
   record("exception", "missing .py file fails", missing.status !== 0);
 
   // 3. empty script path — validated in vitest validateScriptConfig
-  record("exception", "empty script path (unit)", true, "covered by validateScriptConfig");
+  record(
+    "exception",
+    "empty script path (unit)",
+    true,
+    "covered by validateScriptConfig",
+  );
 
   // 4. empty output
   const empty = await runPython(join(fixturesDir, "empty.py"));
   record("exception", "empty stdout", empty.stdout.trim() === "");
 
   // 5. invalid JSON
-  const invalid = spawnSync("python", [join(fixturesDir, "invalid_json.py")], { encoding: "utf8" });
+  const invalid = spawnSync("python", [join(fixturesDir, "invalid_json.py")], {
+    encoding: "utf8",
+  });
   try {
     JSON.parse(invalid.stdout);
     record("exception", "invalid JSON detectable", false);
@@ -110,7 +134,11 @@ async function exceptionTests() {
   }
 
   // 6. missing fields
-  const missingFields = spawnSync("python", [join(fixturesDir, "missing_fields.py")], { encoding: "utf8" });
+  const missingFields = spawnSync(
+    "python",
+    [join(fixturesDir, "missing_fields.py")],
+    { encoding: "utf8" },
+  );
   const parsed = JSON.parse(missingFields.stdout);
   record(
     "exception",
@@ -119,18 +147,34 @@ async function exceptionTests() {
   );
 
   // 7. timeout + kill
-  const sleep = await runPython(join(fixturesDir, "sleep_timeout.py"), [], 3000);
-  record("exception", "timeout kills python", sleep.killed === true, `${sleep.durationMs}ms`);
+  const sleep = await runPython(
+    join(fixturesDir, "sleep_timeout.py"),
+    [],
+    3000,
+  );
+  record(
+    "exception",
+    "timeout kills python",
+    sleep.killed === true,
+    `${sleep.durationMs}ms`,
+  );
 
   // 8. huge JSON size
   const huge = spawnSync("python", [join(fixturesDir, "huge_json.py")], {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024,
   });
-  record("exception", "huge JSON produced", huge.stdout.length > 5_000_000, `${(huge.stdout.length / 1e6).toFixed(1)}MB`);
+  record(
+    "exception",
+    "huge JSON produced",
+    huge.stdout.length > 5_000_000,
+    `${(huge.stdout.length / 1e6).toFixed(1)}MB`,
+  );
 
   // 9. stderr secrets (should not appear in logs — code review; here just produce)
-  const sec = spawnSync("python", [join(fixturesDir, "stderr_secrets.py")], { encoding: "utf8" });
+  const sec = spawnSync("python", [join(fixturesDir, "stderr_secrets.py")], {
+    encoding: "utf8",
+  });
   record(
     "exception",
     "stderr contains token-like content",
@@ -169,26 +213,54 @@ async function performanceTests() {
       times.push(Math.round(performance.now() - t0));
     }
     const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
-    record("performance", "real script avg 5 runs (ms)", avg < 60000, `avg=${avg}ms min=${Math.min(...times)} max=${Math.max(...times)}`);
+    record(
+      "performance",
+      "real script avg 5 runs (ms)",
+      avg < 60000,
+      `avg=${avg}ms min=${Math.min(...times)} max=${Math.max(...times)}`,
+    );
   } else {
-    record("performance", "real script path", true, "skipped: set CODEX_USAGE_SCRIPT to include real-source timing");
+    record(
+      "performance",
+      "real script path",
+      true,
+      "skipped: set CODEX_USAGE_SCRIPT to include real-source timing",
+    );
   }
 
   const mockScript = join(root, "examples", "mock-codex-usage.py");
   const mockStart = performance.now();
-  spawnSync("python", [mockScript, "all", "--json"], { encoding: "utf8", windowsHide: true });
-  record("performance", "mock script single run", true, `${Math.round(performance.now() - mockStart)}ms`);
+  spawnSync("python", [mockScript, "all", "--json"], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  record(
+    "performance",
+    "mock script single run",
+    true,
+    `${Math.round(performance.now() - mockStart)}ms`,
+  );
 }
 
 function securityChecks() {
   const gitLs = spawnSync("git", ["ls-files"], { cwd: root, encoding: "utf8" });
   const files = (gitLs.stdout || "").split("\n").filter(Boolean);
   if (gitLs.status !== 0) {
-    record("security", "git ls-files", true, "skipped: not a git repo or git unavailable");
+    record(
+      "security",
+      "git ls-files",
+      true,
+      "skipped: not a git repo or git unavailable",
+    );
   } else {
     const badPatterns = [/\.env$/, /auth\.json$/, /token/i, /cookie/i];
     const suspicious = files.filter((f) => badPatterns.some((p) => p.test(f)));
-    record("security", "git tracked secrets files", suspicious.length === 0, suspicious.join(", ") || "none");
+    record(
+      "security",
+      "git tracked secrets files",
+      suspicious.length === 0,
+      suspicious.join(", ") || "none",
+    );
   }
 
   const grepToken = spawnSync(
@@ -196,23 +268,44 @@ function securityChecks() {
     ["grep", "-i", "sk-[a-z0-9]{10,}", "--", "*.ts", "*.tsx", "*.rs", "*.json"],
     { cwd: root, encoding: "utf8" },
   );
-  record("security", "no real sk- tokens in source", grepToken.status !== 0 || !grepToken.stdout?.trim());
+  record(
+    "security",
+    "no real sk- tokens in source",
+    grepToken.status !== 0 || !grepToken.stdout?.trim(),
+  );
 
-  record("security", "debug panel lazy render", true, "code review: DebugPanel expanded gate");
-  record("security", "rawText truncated 2KB", true, "code review: parser truncateRawText");
-  record("security", "stdout limit 5MB rust", true, "code review: read_limited MAX_STDOUT_BYTES");
+  record(
+    "security",
+    "debug panel lazy render",
+    true,
+    "code review: DebugPanel expanded gate",
+  );
+  record(
+    "security",
+    "rawText truncated 2KB",
+    true,
+    "code review: parser truncateRawText",
+  );
+  record(
+    "security",
+    "stdout limit 5MB rust",
+    true,
+    "code review: read_limited MAX_STDOUT_BYTES",
+  );
 }
 
 function concurrencyCodeReview() {
   const src = readFileSync(join(root, "src", "App.tsx"), "utf8");
-  const hasRef = src.includes("isRefreshingRef") && src.includes("setRefreshLock");
+  const hasRef =
+    src.includes("isRefreshingRef") && src.includes("setRefreshLock");
   const noTopCountdown = !src.includes("nextRefreshIn");
   record("concurrency", "isRefreshingRef + refresh lock", hasRef);
   record("concurrency", "no App-level nextRefreshIn", noTopCountdown);
   record(
     "concurrency",
     "auto refresh skip if busy",
-    src.includes("if (isRefreshingRef.current)") && src.includes("scheduleNext"),
+    src.includes("if (isRefreshingRef.current)") &&
+      src.includes("scheduleNext"),
     "scheduleNext guard",
   );
 }
@@ -227,10 +320,13 @@ async function main() {
   concurrencyCodeReview();
 
   const failed = results.filter((r) => !r.pass);
-  console.log(`\n=== Summary: ${results.length - failed.length}/${results.length} passed ===`);
+  console.log(
+    `\n=== Summary: ${results.length - failed.length}/${results.length} passed ===`,
+  );
   if (failed.length) {
     console.log("Failed:");
-    for (const f of failed) console.log(`  - ${f.category} :: ${f.name}: ${f.note}`);
+    for (const f of failed)
+      console.log(`  - ${f.category} :: ${f.name}: ${f.note}`);
     process.exit(1);
   }
 }

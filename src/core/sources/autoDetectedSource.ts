@@ -143,7 +143,8 @@ export async function tryCandidate(
     case "codex-usage-script": {
       const scriptPath = candidate.detectedPath;
       if (!scriptPath) return { ok: false, error: "Script path missing" };
-      const python = candidate.pythonCommand ?? config.pythonCommand ?? "python";
+      const python =
+        candidate.pythonCommand ?? config.pythonCommand ?? "python";
       const state = await refreshAppStateFromScript(
         {
           pythonCommand: python,
@@ -155,15 +156,23 @@ export async function tryCandidate(
       if (!hasQuotaData(state)) {
         return {
           ok: false,
-          error: state.codex.errors[0] ?? "Script source returned no quota data",
+          error:
+            state.codex.errors[0] ?? "Script source returned no quota data",
         };
       }
       return { ok: true, state, resolved: candidateToResolved(candidate) };
     }
     case "win-codexbar-compatible": {
-      const { stdout, error } = await fetchViaAdapter("wham", "all", timeoutSecs);
+      const { stdout, error } = await fetchViaAdapter(
+        "wham",
+        "all",
+        timeoutSecs,
+      );
       if (error || !stdout.trim()) {
-        return { ok: false, error: error ?? "Wham adapter returned empty data" };
+        return {
+          ok: false,
+          error: error ?? "Wham adapter returned empty data",
+        };
       }
       const state = buildAppState(adapterStdoutToRawInputs(stdout), {
         lang: options.lang,
@@ -201,7 +210,8 @@ export async function tryCandidate(
         return {
           ok: false,
           error:
-            state.codex.errors[0] ?? "Session-log adapter returned no quota data",
+            state.codex.errors[0] ??
+            "Session-log adapter returned no quota data",
         };
       }
       state.codex.source = "adapter:session-log";
@@ -265,7 +275,11 @@ export async function testCandidateConnection(
       return { ...result, durationMs: Date.now() - start };
     }
     case "win-codexbar-compatible": {
-      const { error } = await fetchViaAdapter("wham", "all", PROBE_TIMEOUT_SECS);
+      const { error } = await fetchViaAdapter(
+        "wham",
+        "all",
+        PROBE_TIMEOUT_SECS,
+      );
       return {
         ok: !error,
         message: error ?? "OK",

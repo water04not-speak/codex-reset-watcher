@@ -11,7 +11,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Win-CodexBar / wham `/wham/usage` 片段 → rate_limit 对象。 */
-export function normalizeWhamUsage(usage: unknown): Record<string, unknown> | null {
+export function normalizeWhamUsage(
+  usage: unknown,
+): Record<string, unknown> | null {
   if (!isRecord(usage)) return null;
   const rateLimit = isRecord(usage.rate_limit) ? usage.rate_limit : usage;
   const primary = rateLimit.primary_window ?? rateLimit.primary;
@@ -68,10 +70,9 @@ export function mergeWhamPayload(
 /**
  * codex-quota-widget 兼容：session / app-server 快照 → rate_limits 简化形。
  */
-export function normalizeQuotaWidgetSnapshot(snapshot: unknown): Record<
-  string,
-  unknown
-> | null {
+export function normalizeQuotaWidgetSnapshot(
+  snapshot: unknown,
+): Record<string, unknown> | null {
   if (!isRecord(snapshot)) return null;
 
   const direct = isRecord(snapshot.rate_limits) ? snapshot.rate_limits : null;

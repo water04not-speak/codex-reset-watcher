@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildAppState,
-  parseResetCredits,
-  parseWindows,
-} from "./parser";
+import { buildAppState, parseResetCredits, parseWindows } from "./parser";
 import { isRefreshLocked, setRefreshLock } from "./refreshLock";
 import { redactPath } from "./privacy";
 import { normalizeConfig } from "./config";
@@ -43,7 +39,10 @@ describe("QA parser edge cases", () => {
   });
 
   it("truncates usageSummary rawText to <= 2KB", () => {
-    const state = buildAppState({ all: HUGE_LOCAL }, { lang: "en", now: new Date("2026-07-03T12:00:00Z") });
+    const state = buildAppState(
+      { all: HUGE_LOCAL },
+      { lang: "en", now: new Date("2026-07-03T12:00:00Z") },
+    );
     expect(state.usageSummary?.rawText.length).toBeLessThanOrEqual(2100);
     expect(state.usageSummary?.rawText).toContain("truncated");
   });

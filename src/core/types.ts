@@ -13,6 +13,36 @@ export type Language = LanguageCode;
 /** 主题标识。 */
 export type Theme = "dark" | "light";
 
+/** 历史保留天数；null 表示永久保留。 */
+export type HistoryRetentionDays = 7 | 30 | 90 | 180 | null;
+
+/** 点击关闭按钮时的桌面行为。 */
+export type CloseBehavior = "minimizeToTray" | "quit";
+
+export interface NotificationRuleConfig {
+  creditExpiry: boolean;
+  windowRecovered: boolean;
+  depletionRisk: boolean;
+  refreshFailures: boolean;
+  sourceFallback: boolean;
+}
+
+export interface DoNotDisturbConfig {
+  enabled: boolean;
+  start: string;
+  end: string;
+  allowUrgent: boolean;
+}
+
+export interface NotificationConfig {
+  enabled: boolean;
+  paused: boolean;
+  expiryWarningHours: number;
+  urgentExpiryHours: number;
+  rules: NotificationRuleConfig;
+  doNotDisturb: DoNotDisturbConfig;
+}
+
 /**
  * 数据桥支持的数据类型：
  * - `all`    对应 `codex_usage.py all --json`
@@ -59,6 +89,8 @@ export type ResetCreditStatus = "normal" | "expiring" | "expired" | "unknown";
 export interface ResetCredit {
   /** 在 credits 数组中的下标（稳定引用用）。 */
   index: number;
+  /** 上游稳定标识；没有时为 null。 */
+  sourceId?: string | null;
   /** 源字段 reset_type，例如 "codex_rate_limits"。 */
   resetType: string;
   /** 源字段 status（available/redeemed/... 可能变化），原样保留。 */
@@ -67,6 +99,10 @@ export interface ResetCredit {
   grantedAt: string | null;
   /** ISO UTC 过期时间；一切剩余时间计算以此为准；解析不到为 null。 */
   expiresAt: string | null;
+  /** 上游返回的原始面额；解析不到为 null。 */
+  amount?: number | null;
+  /** 上游返回的当前余额；仅保存，不参与稳定标识。 */
+  remaining?: number | null;
   /** 距离过期的剩余秒数（相对当前时间，自行计算）；无 expiresAt 为 null。 */
   remainingSeconds: number | null;
   /** 人类可读的剩余时间文案（由 i18n 生成）。 */
@@ -154,11 +190,79 @@ export interface AppState {
   history: HistoryEntry[];
 }
 
+export type SnapshotSourceHealth =
+  "healthy" | "degraded" | "unavailable" | "mock";
+
+export interface QuotaHistoryWindow {
+  remaining: number | null;
+  limit: number | null;
+  resetAt: string | null;
+}
+
+export interface QuotaHistoryCredit {
+  /** 由非敏感字段生成的稳定本地标识。 */
+  id: string;
+  remaining: number | null;
+  amount: number | null;
+  expiresAt: string | null;
+  status: ResetCreditStatus;
+}
+
+/** 只包含标准化额度字段，不包含任何凭据或原始响应。 */
+export interface QuotaHistorySnapshot {
+  schemaVersion: 1;
+  capturedAt: string;
+  sourceType: string;
+  sourceHealth: SnapshotSourceHealth;
+  isDemo: boolean;
+  fiveHourWindow: QuotaHistoryWindow | null;
+  sevenDayWindow: QuotaHistoryWindow | null;
+  credits: QuotaHistoryCredit[];
+  fetchDurationMs: number;
+}
+
+export interface TrendWindowResult {
+  usage24Hours: number | null;
+  usage7Days: number | null;
+  averagePerHour: number | null;
+  estimatedExhaustedAt: string | null;
+}
+
+export interface CreditRisk {
+  id: string;
+  expiresAt: string;
+  hoursRemaining: number;
+  unusedAmount: number | null;
+  level: "warning" | "urgent";
+}
+
+export interface UsageTrendAnalysis {
+  status: "ready" | "insufficientData";
+  snapshotCount: number;
+  spanHours: number;
+  lastUsageAt: string | null;
+  fiveHour: TrendWindowResult;
+  sevenDay: TrendWindowResult;
+  creditRisks: CreditRisk[];
+}
+
+export interface SourceHealthSummary {
+  sourceType: string;
+  isReal: boolean;
+  lastSuccessAt: string | null;
+  lastDurationMs: number | null;
+  consecutiveFailures: number;
+  lastErrorSummary: string | null;
+  adapterHealth: SnapshotSourceHealth;
+  isFallback: boolean;
+  isDemo: boolean;
+}
+
 import type { SourceCandidate, SourceMode } from "./sources/types";
 
 /** 应用配置（与 config/default-config.json 结构一致）。 */
 export interface AppConfig {
-  /** 配置 schema 版本；v0.2.0 起为 2。 */
+  /** 配置 schema 版本；v0.3.0 起为 3。 */
   configVersion?: number;
   /** 数据源模式：自动探测 / 手动脚本 / 示例数据。 */
   sourceMode?: SourceMode;
@@ -180,6 +284,14 @@ export interface AppConfig {
   alwaysOnTop: boolean;
   /** 是否启动时最小化到托盘。 */
   startMinimized: boolean;
+  /** 关闭窗口时最小化到托盘或直接退出。 */
+  closeBehavior?: CloseBehavior;
+  /** 本地历史保留天数；null 表示永久。 */
+  historyRetentionDays?: HistoryRetentionDays;
+  /** 明确 Demo 模式下是否保存独立标记的 mock 历史。 */
+  persistDemoHistory?: boolean;
+  /** 桌面通知规则。 */
+  notifications?: NotificationConfig;
   /** 界面语言。 */
   language: LanguageCode;
   /** 主题。 */

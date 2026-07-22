@@ -44,7 +44,7 @@ fn parse_window(raw: &Value) -> WindowSnap {
             if let Some(s) = v.as_str() {
                 return Some(s.to_string());
             }
-            v.as_i64().map(|sec| chrono_like_iso(sec))
+            v.as_i64().map(chrono_like_iso)
         });
     WindowSnap {
         used_percent: used,

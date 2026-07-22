@@ -5,18 +5,44 @@
  * （尤其是刷新间隔最小 60 秒的强制约束）。
  */
 
-import type { AppConfig, Language, Theme } from "./types";
+import type {
+  AppConfig,
+  HistoryRetentionDays,
+  Language,
+  NotificationConfig,
+  Theme,
+} from "./types";
 import type { SourceMode } from "./sources/types";
 import { SUPPORTED_LANGUAGES } from "../i18n";
 
 /** 配置 schema 版本。 */
-export const CONFIG_VERSION = 2;
+export const CONFIG_VERSION = 3;
 
 /** 自动刷新最小间隔（秒）。低于此值会被夹到 60。 */
 export const MIN_REFRESH_INTERVAL_SECONDS = 60;
 
 /** 单次数据源调用默认超时（秒）。 */
 export const DEFAULT_COMMAND_TIMEOUT_SECONDS = 25;
+
+export const DEFAULT_NOTIFICATION_CONFIG: NotificationConfig = {
+  enabled: true,
+  paused: false,
+  expiryWarningHours: 72,
+  urgentExpiryHours: 24,
+  rules: {
+    creditExpiry: true,
+    windowRecovered: true,
+    depletionRisk: true,
+    refreshFailures: true,
+    sourceFallback: true,
+  },
+  doNotDisturb: {
+    enabled: false,
+    start: "22:00",
+    end: "08:00",
+    allowUrgent: true,
+  },
+};
 
 /** 内置默认配置（与 config/default-config.json 对应）。 */
 export const DEFAULT_CONFIG: AppConfig = {
@@ -31,6 +57,10 @@ export const DEFAULT_CONFIG: AppConfig = {
   autoStart: false,
   alwaysOnTop: false,
   startMinimized: false,
+  closeBehavior: "minimizeToTray",
+  historyRetentionDays: 90,
+  persistDemoHistory: false,
+  notifications: DEFAULT_NOTIFICATION_CONFIG,
   language: "zh-CN",
   theme: "dark",
   commandTimeoutSeconds: DEFAULT_COMMAND_TIMEOUT_SECONDS,
@@ -40,6 +70,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 
 const VALID_THEMES: Theme[] = ["dark", "light"];
 const VALID_SOURCE_MODES: SourceMode[] = ["auto", "manual", "mock"];
+const VALID_RETENTION_DAYS: HistoryRetentionDays[] = [7, 30, 90, 180, null];
 
 function isSourceMode(value: unknown): value is SourceMode {
   return (
@@ -78,6 +109,82 @@ function isTheme(value: unknown): value is Theme {
   );
 }
 
+function normalizeRetention(value: unknown): HistoryRetentionDays {
+  return (VALID_RETENTION_DAYS as unknown[]).includes(value)
+    ? (value as HistoryRetentionDays)
+    : 90;
+}
+
+function normalizeTime(value: unknown, fallback: string): string {
+  return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
+    ? value
+    : fallback;
+}
+
+function normalizePositiveHours(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.min(8_760, Math.round(value))
+    : fallback;
+}
+
+export function normalizeNotificationConfig(
+  value: unknown,
+): NotificationConfig {
+  const source =
+    typeof value === "object" && value !== null
+      ? (value as Partial<NotificationConfig>)
+      : {};
+  const rules: Partial<NotificationConfig["rules"]> = source.rules ?? {};
+  const dnd: Partial<NotificationConfig["doNotDisturb"]> =
+    source.doNotDisturb ?? {};
+  const expiryWarningHours = normalizePositiveHours(
+    source.expiryWarningHours,
+    DEFAULT_NOTIFICATION_CONFIG.expiryWarningHours,
+  );
+  const urgentExpiryHours = Math.min(
+    normalizePositiveHours(
+      source.urgentExpiryHours,
+      DEFAULT_NOTIFICATION_CONFIG.urgentExpiryHours,
+    ),
+    expiryWarningHours,
+  );
+  return {
+    enabled:
+      typeof source.enabled === "boolean"
+        ? source.enabled
+        : DEFAULT_NOTIFICATION_CONFIG.enabled,
+    paused:
+      typeof source.paused === "boolean"
+        ? source.paused
+        : DEFAULT_NOTIFICATION_CONFIG.paused,
+    expiryWarningHours,
+    urgentExpiryHours,
+    rules: {
+      creditExpiry:
+        typeof rules.creditExpiry === "boolean" ? rules.creditExpiry : true,
+      windowRecovered:
+        typeof rules.windowRecovered === "boolean"
+          ? rules.windowRecovered
+          : true,
+      depletionRisk:
+        typeof rules.depletionRisk === "boolean" ? rules.depletionRisk : true,
+      refreshFailures:
+        typeof rules.refreshFailures === "boolean"
+          ? rules.refreshFailures
+          : true,
+      sourceFallback:
+        typeof rules.sourceFallback === "boolean" ? rules.sourceFallback : true,
+    },
+    doNotDisturb: {
+      enabled: typeof dnd.enabled === "boolean" ? dnd.enabled : false,
+      start: normalizeTime(dnd.start, "22:00"),
+      end: normalizeTime(dnd.end, "08:00"),
+      allowUrgent:
+        typeof dnd.allowUrgent === "boolean" ? dnd.allowUrgent : true,
+    },
+  };
+}
+
 /**
  * 把（可能来自文件的）部分配置规范化为完整、合法的 AppConfig。
  * 未知/非法字段回退到默认值；刷新间隔强制夹紧到 >= 60。
@@ -85,23 +192,25 @@ function isTheme(value: unknown): value is Theme {
 export function normalizeConfig(
   partial: Partial<AppConfig> | null | undefined,
 ): AppConfig {
-  const p = partial ?? {};
+  const p =
+    typeof partial === "object" && partial !== null && !Array.isArray(partial)
+      ? partial
+      : {};
   const sourceMode = migrateSourceMode(p);
   return {
-    configVersion:
-      typeof p.configVersion === "number" ? p.configVersion : CONFIG_VERSION,
+    configVersion: CONFIG_VERSION,
     sourceMode,
     selectedSourceId:
       typeof p.selectedSourceId === "string" || p.selectedSourceId === null
         ? p.selectedSourceId
-        : DEFAULT_CONFIG.selectedSourceId ?? null,
+        : (DEFAULT_CONFIG.selectedSourceId ?? null),
     detectedSourceCache: Array.isArray(p.detectedSourceCache)
       ? p.detectedSourceCache
-      : DEFAULT_CONFIG.detectedSourceCache ?? [],
+      : (DEFAULT_CONFIG.detectedSourceCache ?? []),
     lastDetectedAt:
       typeof p.lastDetectedAt === "string" || p.lastDetectedAt === null
         ? p.lastDetectedAt
-        : DEFAULT_CONFIG.lastDetectedAt ?? null,
+        : (DEFAULT_CONFIG.lastDetectedAt ?? null),
     codexUsagePath:
       typeof p.codexUsagePath === "string"
         ? p.codexUsagePath
@@ -125,6 +234,14 @@ export function normalizeConfig(
       typeof p.startMinimized === "boolean"
         ? p.startMinimized
         : DEFAULT_CONFIG.startMinimized,
+    closeBehavior:
+      p.closeBehavior === "quit" || p.closeBehavior === "minimizeToTray"
+        ? p.closeBehavior
+        : "minimizeToTray",
+    historyRetentionDays: normalizeRetention(p.historyRetentionDays),
+    persistDemoHistory:
+      typeof p.persistDemoHistory === "boolean" ? p.persistDemoHistory : false,
+    notifications: normalizeNotificationConfig(p.notifications),
     language: isLanguage(p.language) ? p.language : DEFAULT_CONFIG.language,
     theme: isTheme(p.theme) ? p.theme : DEFAULT_CONFIG.theme,
     commandTimeoutSeconds:
@@ -138,6 +255,15 @@ export function normalizeConfig(
     performanceMode:
       typeof p.performanceMode === "boolean"
         ? p.performanceMode
-        : DEFAULT_CONFIG.performanceMode ?? false,
+        : (DEFAULT_CONFIG.performanceMode ?? false),
   };
+}
+
+export function parseConfigText(raw: string | null): AppConfig | null {
+  if (!raw) return null;
+  try {
+    return normalizeConfig(JSON.parse(raw) as Partial<AppConfig>);
+  } catch {
+    return null;
+  }
 }
